@@ -1,7 +1,6 @@
-# Flutter State Observer
+# state_lifecycle_observer
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
-
 
 A Flutter package to solve state reuse problems using an Observer pattern.
 
@@ -71,6 +70,23 @@ class _MyLogoState extends State<MyLogo>
 }
 ```
 
+### Using `key` to Recreate Targets
+
+The `key` parameter functions similarly to React's `useEffect` dependencies or Flutter's `Key`.
+When the value returned by the `key` callback changes, the observer will:
+1. Dispose the current `target` (calls `onDisposeTarget`).
+2. Re-create the `target` (calls `buildTarget`).
+
+This is useful when your Controller depends on a specific property (e.g. `userId`) and needs to be fully reset when that property changes.
+
+```dart
+_observer = MyObserver(
+  this,
+  // When 'userId' changes, the old target is disposed and a new one is built.
+  key: () => widget.userId, 
+);
+```
+
 ### Available Observers
 
 #### AnimControllerObserver
@@ -123,12 +139,9 @@ _text = TextEditingControllerObserver(
 
 ### Custom Observer
 
-You can easily create your own observers by extending `LifecycleObserver`.
+You can easily create your own observers by extending `LifecycleObserver<V>`.
 
-Example: A `UserDataObserver` that:
-1. Initializes data fetching in `onInit`.
-2. Refetches data when `userId` changes in `onUpdate`.
-3. Logs debug info in `onBuild`.
+Example: A `UserDataObserver` that fetches data.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -140,6 +153,7 @@ class Data {
   Data(this.id, this.info);
 }
 
+// LifecycleObserver<V> where V is ValueNotifier<Data?>
 class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
   // Mechanism to retrieve the latest param from the widget
   final String Function() getUserId;
@@ -152,21 +166,25 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
     required this.getUserId,
   });
 
+  // 1. Create the target (called in constructor and when key changes)
   @override
-  void onInit() {
-    target = ValueNotifier(null);
+  ValueNotifier<Data?> buildTarget() {
     _currentUserId = getUserId();
-    _fetchData(_currentUserId);
+    final notifier = ValueNotifier<Data?>(null);
+    _fetchData(_currentUserId, notifier); // Start fetch
+    return notifier;
   }
 
+  // 2. Handle widget updates (if key doesn't change)
   @override
-  void onUpdate() {
-    // Check if the dependency (userId) has changed
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    // Check if the dependency (userId) has changed without triggering a full rebuild (if key wasn't used)
     final newUserId = getUserId();
     if (newUserId != _currentUserId) {
       debugPrint('UserId changed from $_currentUserId to $newUserId');
       _currentUserId = newUserId;
-      _fetchData(_currentUserId);
+      _fetchData(_currentUserId, target);
     }
   }
 
@@ -175,19 +193,19 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
     debugPrint('Building with user: $_currentUserId');
   }
 
+  // 3. Cleanup
   @override
-  void onDispose() {
+  void onDisposeTarget(ValueNotifier<Data?> target) {
     target.dispose();
   }
 
-  void _fetchData(String id) async {
+  void _fetchData(String id, ValueNotifier<Data?> notifier) async {
     // Simulate network request
     await Future.delayed(const Duration(milliseconds: 500));
-    if (_currentUserId == id) { // Avoid race conditions
-      target.value = Data(id, 'Info for $id');
+    // Simple check to avoid race conditions if observer was disposed/recreated
+    if (_currentUserId == id) { 
+      notifier.value = Data(id, 'Info for $id');
     }
-  }
-}
   }
 }
 ```
@@ -198,13 +216,9 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
 | :--- | :--- | :--- |
 | **Paradigm** | OOP (Classes) | Functional (Hooks) |
 | **Base Class** | Standard `StatefulWidget` | `HookWidget` |
-| **Lifecycle** | Explicit (`onInit`, `onDispose`) | Implicit (`useEffect`) |
+| **Lifecycle** | Explicit (`buildTarget`, `onDispose`) | Implicit (`useEffect`) |
 | **Learning Curve** | Low (Standard Flutter) | Moderate (Rules of Hooks) |
 | **Magic** | Low (Mixin + List) | High (Element logic) |
-| **Conditional Logic** | Supported anywhere | Not allowed in `build` |
+| **Conditional Logic** | Supported anywhere | only allowed in `build` |
 
-### Why choose state_lifecycle_observer?
-- You prefer object-oriented programming.
-- You want to stick to standard `StatefulWidget`.
-- You dislike the "Rules of Hooks" (e.g., no conditional hooks).
-- You want explicit control over initialization and disposal.
+

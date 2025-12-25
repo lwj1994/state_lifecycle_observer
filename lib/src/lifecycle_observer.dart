@@ -6,21 +6,42 @@ abstract class StateWithObservers {
 }
 
 /// [V] is the type of the managed value (e.g., AnimationController).
-/// [S] is the type of the State that owns this observer.
 abstract class LifecycleObserver<V> {
   late V target;
   late State state;
 
-  LifecycleObserver(this.state) {
+  Object? currentKey;
+
+  Object? Function()? key;
+
+  LifecycleObserver(this.state, {this.key}) {
     if (state is StateWithObservers) {
       (state as StateWithObservers).registerObserver(this);
+    } else {
+      assert(false,
+          'State must mixin LifecycleObserverMixin to use LifecycleObserver');
     }
-    onInit();
+    currentKey = key?.call();
+    target = buildTarget();
   }
 
-  /// Lifecycle hooks for subclasses to override.
-  void onInit() {}
-  void onUpdate() {}
+  @mustCallSuper
+  void onDidUpdateWidget() {
+    if (currentKey != key?.call()) {
+      currentKey = key?.call();
+      onDisposeTarget(target);
+      target = buildTarget();
+    }
+  }
+
   void onBuild(BuildContext context) {}
-  void onDispose() {}
+
+  @mustCallSuper
+  void onDispose() {
+    onDisposeTarget(target);
+  }
+
+  void onDisposeTarget(V target) {}
+
+  V buildTarget();
 }

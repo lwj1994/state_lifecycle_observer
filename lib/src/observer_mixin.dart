@@ -16,7 +16,7 @@ mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
     super.didUpdateWidget(oldWidget);
     // Automatically trigger sync logic in all observers.
     for (var observer in _observers) {
-      observer.onUpdate();
+      observer.onDidUpdateWidget();
     }
   }
 
