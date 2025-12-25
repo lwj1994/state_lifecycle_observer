@@ -13,9 +13,7 @@ class AdditionalObserversTestWidget extends StatefulWidget {
 
 class _AdditionalObserversTestWidgetState
     extends State<AdditionalObserversTestWidget>
-    with
-        TickerProviderStateMixin,
-        LifecycleObserverMixin{
+    with TickerProviderStateMixin, LifecycleObserverMixin {
   late ScrollControllerObserver scrollObserver;
   late TabControllerObserver tabObserver;
   late TextEditingControllerObserver textObserver;
