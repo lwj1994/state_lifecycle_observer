@@ -1,5 +1,8 @@
 # Flutter State Observer
 
+[![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
+
+
 使用 Observer 模式解决状态复用问题的 Flutter 包。
 
 ## 特性

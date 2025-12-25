@@ -1,5 +1,8 @@
 # Flutter State Observer
 
+[![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
+
+
 A Flutter package to solve state reuse problems using an Observer pattern.
 
 ## Features
