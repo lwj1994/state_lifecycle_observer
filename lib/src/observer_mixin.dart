@@ -24,6 +24,7 @@ mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
     super.didUpdateWidget(oldWidget);
     // Automatically trigger sync logic in all observers.
     for (var observer in _observers) {
+      // ignore: invalid_use_of_protected_member
       observer.onDidUpdateWidget();
     }
   }
@@ -31,6 +32,7 @@ mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
   @override
   void dispose() {
     for (var observer in _observers) {
+      // ignore: invalid_use_of_protected_member
       observer.onDispose();
     }
     _observers.clear();
@@ -45,6 +47,7 @@ mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
   @mustCallSuper
   Widget build(BuildContext context) {
     for (var observer in _observers) {
+      // ignore: invalid_use_of_protected_member
       observer.onBuild(context);
     }
     return Container();
