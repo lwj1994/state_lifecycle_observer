@@ -1,16 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:state_lifecycle_observer/src/lifecycle_observer.dart';
 
-/// An observer that listens to a [Listenable] (like [Animation] or [ValueNotifier])
+/// An observer that listens to a [Listenable] (like [Animation]
+/// or [ValueNotifier])
 /// and triggers a rebuild when the value changes.
 class ListenableObserver extends LifecycleObserver<Listenable> {
-  late final Listenable _listenable;
+  final Listenable _listenable;
   ListenableObserver(
     super.state, {
     required Listenable listenable,
     super.key,
-  }) {
-    _listenable = listenable;
+  }) : _listenable = listenable {
     _listenable.addListener(_markNeedsBuild);
   }
 
@@ -20,8 +21,7 @@ class ListenableObserver extends LifecycleObserver<Listenable> {
   }
 
   void _markNeedsBuild() {
-    // ignore: invalid_use_of_protected_member
-    state.setState(() {});
+    safeSetState(() {});
   }
 
   @override
@@ -30,100 +30,124 @@ class ListenableObserver extends LifecycleObserver<Listenable> {
   }
 }
 
-class ScrollControllerObserver extends LifecycleObserver<ScrollController> {
-  final double initialScrollOffset;
-  final bool keepScrollOffset;
-  final String? debugLabel;
-  final ScrollControllerCallback? onAttach;
-  final ScrollControllerCallback? onDetach;
+/// An observer that manages a [Future].
+///
+/// It exposes the state of the future as an [AsyncSnapshot].
+class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
+  /// The future to observe.
+  final Future<T>? future;
 
-  ScrollControllerObserver(
+  /// The initial data to use before the future completes.
+  final T? initialData;
+
+  FutureObserver(
     super.state, {
-    this.initialScrollOffset = 0.0,
-    this.keepScrollOffset = true,
-    this.debugLabel,
-    this.onAttach,
-    this.onDetach,
+    this.future,
+    this.initialData,
     super.key,
   });
 
   @override
-  void onDisposeTarget(ScrollController target) {
-    target.dispose();
-  }
-
-  @override
-  ScrollController buildTarget() {
-    return ScrollController(
-      initialScrollOffset: initialScrollOffset,
-      keepScrollOffset: keepScrollOffset,
-      debugLabel: debugLabel,
-      onAttach: onAttach,
-      onDetach: onDetach,
-    );
-  }
-}
-
-class TabControllerObserver extends LifecycleObserver<TabController> {
-  final int length;
-  final int initialIndex;
-  final Duration? animationDuration;
-
-  TabControllerObserver(
-    super.state, {
-    required this.length,
-    this.initialIndex = 0,
-    this.animationDuration,
-    super.key,
-  });
-
-  @override
-  void onDisposeTarget(TabController target) {
-    target.dispose();
-  }
-
-  @override
-  TabController buildTarget() {
-    return TabController(
-      length: length,
-      vsync: state as TickerProvider,
-      initialIndex: initialIndex,
-      animationDuration: animationDuration,
-    );
-  }
-}
-
-class TextEditingControllerObserver
-    extends LifecycleObserver<TextEditingController> {
-  final String? text;
-  final TextEditingValue? editingValue;
-
-  TextEditingControllerObserver(
-    super.state, {
-    this.text,
-    this.editingValue,
-    super.key,
-  });
-
-  factory TextEditingControllerObserver.fromValue(
-      State state, TextEditingValue? value) {
-    return TextEditingControllerObserver(
-      state,
-      editingValue: value,
+  AsyncSnapshot<T> buildTarget() {
+    _subscribe();
+    return AsyncSnapshot<T>.withData(
+      ConnectionState.waiting,
+      initialData as T,
     );
   }
 
-  @override
-  void onDisposeTarget(TextEditingController target) {
-    target.dispose();
-  }
+  Future<T>? _activeFuture;
 
-  @override
-  TextEditingController buildTarget() {
-    if (editingValue != null) {
-      return TextEditingController.fromValue(editingValue!);
-    } else {
-      return TextEditingController(text: text);
+  void _subscribe() {
+    if (future == _activeFuture) return;
+    _activeFuture = future;
+
+    if (future == null) {
+      return;
     }
+
+    future!.then((data) {
+      if (_activeFuture == future && state.mounted) {
+        safeSetState(() {
+          target = AsyncSnapshot<T>.withData(ConnectionState.done, data);
+        });
+      }
+    }, onError: (error, stackTrace) {
+      if (_activeFuture == future && state.mounted) {
+        safeSetState(() {
+          target = AsyncSnapshot<T>.withError(
+            ConnectionState.done,
+            error,
+            stackTrace,
+          );
+        });
+      }
+    });
+  }
+}
+
+/// An observer that manages a [Stream].
+///
+/// It exposes the state of the stream as an [AsyncSnapshot] and automatically
+/// handles subscription cancellation.
+class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
+  /// The stream to observe.
+  final Stream<T>? stream;
+
+  /// The initial data to use before the stream emits any value.
+  final T? initialData;
+
+  StreamObserver(
+    super.state, {
+    this.stream,
+    this.initialData,
+    super.key,
+  });
+
+  StreamSubscription<T>? _subscription;
+
+  @override
+  AsyncSnapshot<T> buildTarget() {
+    _subscribe();
+    return AsyncSnapshot<T>.withData(
+      ConnectionState.waiting,
+      initialData as T,
+    );
+  }
+
+  void _subscribe() {
+    _subscription?.cancel();
+    if (stream == null) return;
+
+    _subscription = stream!.listen(
+      (data) {
+        if (!state.mounted) return;
+        safeSetState(() {
+          target = AsyncSnapshot<T>.withData(ConnectionState.active, data);
+        });
+      },
+      onError: (error, stackTrace) {
+        if (!state.mounted) return;
+        safeSetState(() {
+          target = AsyncSnapshot<T>.withError(
+            ConnectionState.active,
+            error,
+            stackTrace,
+          );
+        });
+      },
+      onDone: () {
+        if (!state.mounted) return;
+        safeSetState(() {
+          target = target.inState(ConnectionState.done);
+        });
+      },
+    );
+  }
+
+  @override
+  void onDisposeTarget(AsyncSnapshot<T> target) {
+    _subscription?.cancel();
+    _subscription = null;
   }
 }

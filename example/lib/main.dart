@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'examples/hello_world.dart';
 import 'examples/timer.dart';
 import 'examples/animation_usage.dart';
+import 'examples/multiple_controllers.dart';
 
 void main() {
   runApp(const MyApp());
@@ -58,6 +59,20 @@ class GalleryPage extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const AnimationUsageExample(),
+                ),
+              );
+            },
+            trailing: const Icon(Icons.chevron_right),
+          ),
+          ListTile(
+            title: const Text('Refutation: Multiple Controllers'),
+            subtitle: const Text(
+              '2 AnimationControllers + 1 TextEditingController',
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const MultipleControllersExample(),
                 ),
               );
             },

@@ -8,11 +8,8 @@ A Flutter package to solve state reuse problems using an Observer pattern.
 
 - **LifecycleObserver**: A base class for creating reusable state observers.
 - **LifecycleObserverMixin**: A mixin to manage the lifecycle of observers within a `State`.
-- **Common Observers**:
-  - `AnimControllerObserver`: Reusable `AnimationController` logic.
-  - `ScrollControllerObserver`: Manages `ScrollController`.
-  - `TabControllerObserver`: Manages `TabController`.
-  - `TextEditingControllerObserver`: Manages `TextEditingController`.
+- **Built-in Observers**: Classified into **Base**, **Widget**, and **Anim** categories to cover common scenarios.
+
 
 ## Usage
 
@@ -70,72 +67,36 @@ class _MyLogoState extends State<MyLogo>
 }
 ```
 
-### Using `key` to Recreate Targets
 
-The `key` parameter functions similarly to React's `useEffect` dependencies or Flutter's `Key`.
-When the value returned by the `key` callback changes, the observer will:
-1. Dispose the current `target` (calls `onDisposeTarget`).
-2. Re-create the `target` (calls `buildTarget`).
+### Built-in Observers
 
-This is useful when your Controller depends on a specific property (e.g. `userId`) and needs to be fully reset when that property changes.
+The library provides three main categories of built-in observers: `Base`, `Widget`, and `Anim`.
 
-```dart
-_observer = MyObserver(
-  this,
-  // When 'userId' changes, the old target is disposed and a new one is built.
-  key: () => widget.userId, 
-);
-```
+#### 1. Base Observers (`observer/base.dart`)
 
-### Available Observers
+General-purpose observers for data and async operations.
 
-#### AnimControllerObserver
-Syncs properties from widget automatically. Support all `AnimationController` properties.
-Requires `TickerProvider` (mix your state with `TickerProviderStateMixin`).
+- **`ListenableObserver`**: Listens to any `Listenable` (e.g., `ValueNotifier`, `ChangeNotifier`) and rebuilds the widget when notified.
+- **`FutureObserver<T>`**: Manages a `Future`, exposing the current state as an `AsyncSnapshot`.
+- **`StreamObserver<T>`**: Manages a `Stream` subscription, creating an `AsyncSnapshot` and handling active/done states.
 
-```dart
-_anim = AnimControllerObserver(
-  this,
-  duration: () => widget.duration,
-  reverseDuration: () => widget.reverseDuration,
-  lowerBound: 0.0,
-  upperBound: 1.0,
-  debugLabel: 'MyAnim',
-);
-```
+#### 2. Widget Observers (`observer/widget.dart`)
 
-#### ScrollControllerObserver
-Simplifies creation and disposal of `ScrollController`.
+Observers that simplify the creation, disposal, and management of common Flutter controllers.
 
-```dart
-_scroll = ScrollControllerObserver(
-  this,
-  initialScrollOffset: 0.0,
-  keepScrollOffset: true,
-);
-```
+- **`ScrollControllerObserver`**: Manages `ScrollController`.
+- **`PageControllerObserver`**: Manages `PageController`.
+- **`TabControllerObserver`**: Manages `TabController`. Requires `TickerProvider`.
+- **`TextEditingControllerObserver`**: Manages `TextEditingController`.
+- **`FocusNodeObserver`**: Manages `FocusNode`.
 
-#### TabControllerObserver
-Simplifies creation and disposal of `TabController`.
-Requires `TickerProvider`.
+#### 3. Anim Observers (`observer/anim.dart`)
 
-```dart
-_tab = TabControllerObserver(
-  this,
-  length: 3,
-  initialIndex: 0,
-);
-```
+Observers for animation-related classes.
 
-#### TextEditingControllerObserver
-Simplifies creation and disposal of `TextEditingController`.
+- **`AnimControllerObserver`**: Manages `AnimationController`. Automatically syncs `duration` and `reverseDuration` from the widget configuration.
+- **`AnimationObserver<T>`**: Listens to an `Animation<T>` object and rebuilds the widget when the value changes.
 
-```dart
-_text = TextEditingControllerObserver(
-  this,
-  text: 'Initial Text',
-);
-```
 
 ### Custom Observer
 
@@ -209,6 +170,27 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
   }
 }
 ```
+
+### Using `key` to Recreate Targets
+
+The `key` parameter functions similarly to React's `useEffect` dependencies or Flutter's `Key`.
+When the value returned by the `key` callback changes, the observer will:
+1. Dispose the current `target` (calls `onDisposeTarget`).
+2. Re-create the `target` (calls `buildTarget`).
+
+This is useful when your Controller depends on a specific property (e.g. `userId`) and needs to be fully reset when that property changes.
+
+```dart
+_observer = MyObserver(
+  this,
+  // When 'userId' changes, the old target is disposed and a new one is built.
+  key: () => widget.userId, 
+);
+```
+
+> **Note**: Using `key` is not strictly necessary to recreate the target. You can create a new Observer instance.
+
+
 
 ## Comparison with flutter_hooks
 

@@ -1,6 +1,14 @@
 import 'package:flutter/widgets.dart';
 import 'lifecycle_observer.dart';
 
+/// A mixin that manages [LifecycleObserver]s within a [State].
+///
+/// This mixin handles the registration, key updates, build notifications,
+/// and disposal of observers.
+///
+/// To use this mixin:
+/// 1. Add it to your [State] class.
+/// 2. Call `super.build(context)` within your [build] method.
 mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
     implements StateWithObservers {
   // Use raw LifecycleObserver to allow any observer type.
@@ -32,6 +40,7 @@ mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
   /// Manually call this method in your `build` method.
   ///
   /// This triggers `onBuild` for all registered observers.
+  /// The return value is typically ignored as this is called via `super.build`.
   @override
   @mustCallSuper
   Widget build(BuildContext context) {

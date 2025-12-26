@@ -1,3 +1,9 @@
+## 0.0.3
+
+* **Enhancement**: Introduced `safeSetState` in `LifecycleObserver` to handle state updates safely across different scheduler phases.
+* **Fix**: `FutureObserver` and `StreamObserver` now use `safeSetState` to prevent errors when updates are triggered during build, layout, or paint phases.
+* **Docs**: Reorganized README to clearly categorize built-in observers (Base, Widget, Anim) and added clarification on `key` usage.
+
 ## 0.0.2
 
 * **Breaking Change**: Renamed `onUpdate` to `onDidUpdateWidget` to better align with Flutter's lifecycle naming.

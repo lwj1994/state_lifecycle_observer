@@ -1,14 +1,30 @@
 import 'package:flutter/widgets.dart';
 import '../lifecycle_observer.dart';
 
+/// An observer that manages an [AnimationController].
+///
+/// Wraps [AnimationController] creation and disposal.
+/// Supports syncing [duration] and [reverseDuration] on widget updates.
 class AnimControllerObserver extends LifecycleObserver<AnimationController> {
   /// A closure to retrieve the latest duration from the widget.
   final Duration? Function() duration;
+
+  /// A closure to retrieve the latest reverse duration from the widget.
   final Duration? Function()? reverseDuration;
+
+  /// The initial value of the animation.
   final double? value;
+
+  /// The lower bound of the animation.
   final double lowerBound;
+
+  /// The upper bound of the animation.
   final double upperBound;
+
+  /// The behavior of the animation.
   final AnimationBehavior animationBehavior;
+
+  /// A debug label for the controller.
   final String? debugLabel;
 
   AnimControllerObserver(
@@ -26,7 +42,7 @@ class AnimControllerObserver extends LifecycleObserver<AnimationController> {
   @override
   void onDidUpdateWidget() {
     super.onDidUpdateWidget();
-    // Sync logic: Compare current controller duration with the latest picker value.
+    // Sync logic: Compare current controller duration with the latest
     final latestDuration = duration();
     if (target.duration != latestDuration) {
       target.duration = latestDuration;
@@ -60,19 +76,18 @@ class AnimControllerObserver extends LifecycleObserver<AnimationController> {
   }
 }
 
-/// An observer that listens to a [Listenable] (like [Animation] or [ValueNotifier])
-/// and triggers a rebuild when the value changes.
+/// An observer that listens to an [Animation] and triggers a rebuild
+/// when the value changes.
 ///
-/// This mimics the behavior of `useAnimation` or `useListenable` in flutter_hooks.
+/// This mimics the behavior of `useAnimation` in flutter_hooks.
 class AnimationObserver<T> extends LifecycleObserver<T> {
-  late Animation<T> _animation;
+  final Animation<T> _animation;
 
   AnimationObserver(
     super.state, {
     required Animation<T> animation,
     super.key,
-  }) {
-    _animation = animation;
+  }) : _animation = animation {
     animation.addListener(_markNeedsBuild);
   }
 
@@ -94,7 +109,6 @@ class AnimationObserver<T> extends LifecycleObserver<T> {
   }
 
   void _markNeedsBuild() {
-    // ignore: invalid_use_of_protected_member
-    state.setState(() {});
+    safeSetState(() {});
   }
 }
