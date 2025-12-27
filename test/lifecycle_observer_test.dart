@@ -156,13 +156,13 @@ void main() {
     expect(controller.isDisposed, true);
   });
 
-  testWidgets('LifecycleObserver throws assertion error without mixin',
+  testWidgets('LifecycleObserver throws StateError without mixin',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: NoMixinWidget(),
     ));
 
     // We expect the pump to trigger the exception in initState
-    expect(tester.takeException(), isAssertionError);
+    expect(tester.takeException(), isStateError);
   });
 }

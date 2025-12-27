@@ -38,7 +38,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   }
 
   /// Adds a simple callback-based observer to the state.
-  void addLifecyleCallback({
+  void addLifecycleCallback({
     VoidCallback? onInitState,
     VoidCallback? onDidUpdateWidget,
     VoidCallback? onDispose,
@@ -88,7 +88,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       // ignore: invalid_use_of_protected_member
       observer.onBuild(context);
     }
-    return Container();
+    return const SizedBox.shrink();
   }
 }
 

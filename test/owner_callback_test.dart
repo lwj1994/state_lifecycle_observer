@@ -28,7 +28,7 @@ class _CallbackWidgetState extends State<CallbackWidget>
   @override
   void initState() {
     super.initState();
-    addLifecyleCallback(
+    addLifecycleCallback(
       onInitState: () {
         widget.log.onInitState++;
       },

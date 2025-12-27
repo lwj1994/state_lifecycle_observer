@@ -42,7 +42,7 @@ abstract class LifecycleObserver<V> {
     if (state is LifecycleOwnerMixin) {
       (state as LifecycleOwnerMixin).addLifecycleObserver(this);
     } else {
-      assert(false,
+      throw StateError(
           'State must mixin LifecycleOwnerMixin to use LifecycleObserver');
     }
   }
