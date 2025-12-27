@@ -1,3 +1,24 @@
+## 0.0.5
+* Add `addLifecycleCallback`
+```dart
+  void initState() {
+    super.initState();
+    addLifecyleCallback(
+      onInitState: () {
+        widget.log.onInitState++;
+      },
+      onDidUpdateWidget: () {
+        widget.log.onDidUpdateWidget++;
+      },
+      onDispose: () {
+        widget.log.onDispose++;
+      },
+      onBuild: (context) {
+        widget.log.onBuild++;
+      },
+    );
+  }
+```
 
 ## 0.0.4
 
