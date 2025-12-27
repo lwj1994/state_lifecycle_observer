@@ -40,7 +40,7 @@ abstract class LifecycleObserver<V> {
   /// an assertion error.
   LifecycleObserver(this.state, {this.key}) {
     if (state is LifecycleOwnerMixin) {
-      (state as LifecycleOwnerMixin).registerObserver(this);
+      (state as LifecycleOwnerMixin).addLifecycleObserver(this);
     } else {
       assert(false,
           'State must mixin LifecycleOwnerMixin to use LifecycleObserver');

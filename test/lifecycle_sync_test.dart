@@ -39,6 +39,7 @@ class TestWidgetState extends State<TestWidget> with LifecycleOwnerMixin {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Container();
   }
 }
@@ -96,6 +97,7 @@ class InitStateWidgetState extends State<InitStateWidget>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Container();
   }
 }
@@ -136,6 +138,7 @@ class PrematureAccessWidgetState extends State<PrematureAccessWidget>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Container();
   }
 }

@@ -16,6 +16,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   get lifecycleState => _lifecycleState;
 
   @override
+  @mustCallSuper
   void initState() {
     super.initState();
     _lifecycleState = LifecycleState.initialized;
@@ -26,7 +27,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   }
 
   /// Registers a [LifecycleObserver] to be managed by this state.
-  void registerObserver(LifecycleObserver observer) {
+  void addLifecycleObserver(LifecycleObserver observer) {
     // If the state is already initialized, we manually "replay" the initialization
     // for this new observer so it catches up.
     if (_lifecycleState == LifecycleState.initialized) {
@@ -36,7 +37,25 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
     _observers.add(observer);
   }
 
+  /// Adds a simple callback-based observer to the state.
+  void addLifecyleCallback({
+    VoidCallback? onInitState,
+    VoidCallback? onDidUpdateWidget,
+    VoidCallback? onDispose,
+    void Function(BuildContext)? onBuild,
+  }) {
+    // The observer registers itself in the constructor.
+    _CallbackLifecycleObserver(
+      this,
+      onInitState: onInitState,
+      onDidUpdateWidget: onDidUpdateWidget,
+      onDispose: onDispose,
+      onBuild: onBuild,
+    );
+  }
+
   @override
+  @mustCallSuper
   void didUpdateWidget(T oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Automatically trigger sync logic in all observers.
@@ -47,6 +66,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   }
 
   @override
+  @mustCallSuper
   void dispose() {
     _lifecycleState = LifecycleState.disposed;
     for (var observer in _observers) {
@@ -69,5 +89,51 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       observer.onBuild(context);
     }
     return Container();
+  }
+}
+
+/// A [LifecycleObserver] that accepts callbacks for lifecycle events.
+class _CallbackLifecycleObserver extends LifecycleObserver<void> {
+  final VoidCallback? _onInitState;
+  final VoidCallback? _onDidUpdateWidget;
+  final VoidCallback? _onDispose;
+  final void Function(BuildContext)? _onBuild;
+
+  _CallbackLifecycleObserver(
+    super.state, {
+    VoidCallback? onInitState,
+    VoidCallback? onDidUpdateWidget,
+    VoidCallback? onDispose,
+    void Function(BuildContext)? onBuild,
+  })  : _onInitState = onInitState,
+        _onDidUpdateWidget = onDidUpdateWidget,
+        _onDispose = onDispose,
+        _onBuild = onBuild;
+
+  @override
+  void buildTarget() {}
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    _onInitState?.call();
+  }
+
+  @override
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    _onDidUpdateWidget?.call();
+  }
+
+  @override
+  void onBuild(BuildContext context) {
+    super.onBuild(context);
+    _onBuild?.call(context);
+  }
+
+  @override
+  void onDispose() {
+    _onDispose?.call();
+    super.onDispose();
   }
 }
