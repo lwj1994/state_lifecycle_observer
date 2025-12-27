@@ -2,6 +2,8 @@
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
 
+[中文文档](README_zh.md)
+
 A Flutter package to solve state reuse problems using an Observer pattern inspired by Android's [LifecycleObserver](https://developer.android.com/reference/androidx/lifecycle/LifecycleObserver) and [LifecycleOwner](https://developer.android.com/reference/androidx/lifecycle/LifecycleOwner).
 
 ## Features
@@ -29,25 +31,21 @@ class MyLogo extends StatefulWidget {
 class _MyLogoState extends State<MyLogo> 
     with TickerProviderStateMixin, LifecycleOwnerMixin<MyLogo> {
   
-  late AnimControllerObserver _animObserver;
-  late ScrollControllerObserver _scrollObserver;
+  // LOGIC REUSE: Pass 'this' as the first argument.
+  // The observer automatically registers itself to the mixin.
+  late final _animObserver = AnimControllerObserver(
+    this,
+    duration: () => widget.speed,
+  );
+
+  late final _scrollObserver = ScrollControllerObserver(
+    this,
+    initialScrollOffset: 100.0,
+  );
 
   @override
   void initState() {
     super.initState();
-
-    // LOGIC REUSE: Pass 'this' as the first argument.
-    // The observer automatically registers itself to the mixin.
-    _animObserver = AnimControllerObserver(
-      this,
-      duration: () => widget.speed,
-    );
-
-    _scrollObserver = ScrollControllerObserver(
-      this,
-      initialScrollOffset: 100.0,
-    );
-
     _animObserver.target.repeat(reverse: true);
   }
 
@@ -67,6 +65,38 @@ class _MyLogoState extends State<MyLogo>
 }
 ```
 
+### Using Callbacks
+
+For simple use cases where you don't need a full observer, you can use `addLifecycleCallback`:
+
+```dart
+class _MyWidgetState extends State<MyWidget> with LifecycleOwnerMixin {
+  @override
+  void initState() {
+    super.initState();
+    addLifecycleCallback(
+      onInitState: () {
+        debugPrint('Widget initialized');
+      },
+      onDidUpdateWidget: () {
+        debugPrint('Widget updated');
+      },
+      onBuild: (context) {
+        debugPrint('Widget building');
+      },
+      onDispose: () {
+        debugPrint('Widget disposed');
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Container();
+  }
+}
+```
 
 ### Built-in Observers
 

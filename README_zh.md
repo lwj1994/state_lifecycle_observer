@@ -1,19 +1,17 @@
-# Flutter State Observer
+# state_lifecycle_observer
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
 
+[English](README.md)
 
-使用 Observer 模式解决状态复用问题的 Flutter 包。
+使用 Observer 模式解决状态复用问题的 Flutter 包，灵感来自 Android 的 [LifecycleObserver](https://developer.android.com/reference/androidx/lifecycle/LifecycleObserver) 和 [LifecycleOwner](https://developer.android.com/reference/androidx/lifecycle/LifecycleOwner)。
 
 ## 特性
 
 - **LifecycleObserver**: 用于创建可复用状态观察者的基类。
 - **LifecycleOwnerMixin**: 用于在 `State` 中管理观察者生命周期的 mixin。
-- **常用观察者**:
-  - `AnimControllerObserver`: 可复用的 `AnimationController` 逻辑。
-  - `ScrollControllerObserver`: 管理 `ScrollController`。
-  - `TabControllerObserver`: 管理 `TabController`。
-  - `TextEditingControllerObserver`: 管理 `TextEditingController`。
+- **内置观察者**: 分为 **Base**、**Widget** 和 **Anim** 三类，覆盖常见场景。
+
 
 ## 用法
 
@@ -33,25 +31,21 @@ class MyLogo extends StatefulWidget {
 class _MyLogoState extends State<MyLogo> 
     with TickerProviderStateMixin, LifecycleOwnerMixin<MyLogo> {
   
-  late AnimControllerObserver _animObserver;
-  late ScrollControllerObserver _scrollObserver;
+  // 逻辑复用：将 'this' 作为第一个参数传递。
+  // 观察者会自动注册到 mixin 中。
+  late final _animObserver = AnimControllerObserver(
+    this,
+    duration: () => widget.speed,
+  );
+
+  late final _scrollObserver = ScrollControllerObserver(
+    this,
+    initialScrollOffset: 100.0,
+  );
 
   @override
   void initState() {
     super.initState();
-
-    // 逻辑复用：将 'this' 作为第一个参数传递。
-    // 观察者会自动注册到 mixin 中。
-    _animObserver = AnimControllerObserver(
-      this,
-      duration: () => widget.speed,
-    );
-
-    _scrollObserver = ScrollControllerObserver(
-      this,
-      initialScrollOffset: 100.0,
-    );
-
     _animObserver.target.repeat(reverse: true);
   }
 
@@ -71,64 +65,74 @@ class _MyLogoState extends State<MyLogo>
 }
 ```
 
-### 可用观察者
+### 使用回调
 
-#### AnimControllerObserver
-自动从 Widget 属性同步参数。支持所有 `AnimationController` 属性。
-需要 `TickerProvider`（需混入 `TickerProviderStateMixin`）。
+对于不需要完整观察者的简单场景，可以使用 `addLifecycleCallback`：
 
 ```dart
-_anim = AnimControllerObserver(
-  this,
-  duration: () => widget.duration,
-  reverseDuration: () => widget.reverseDuration,
-  lowerBound: 0.0,
-  upperBound: 1.0,
-  debugLabel: 'MyAnim',
-);
+class _MyWidgetState extends State<MyWidget> with LifecycleOwnerMixin {
+  @override
+  void initState() {
+    super.initState();
+    addLifecycleCallback(
+      onInitState: () {
+        debugPrint('Widget 已初始化');
+      },
+      onDidUpdateWidget: () {
+        debugPrint('Widget 已更新');
+      },
+      onBuild: (context) {
+        debugPrint('Widget 正在构建');
+      },
+      onDispose: () {
+        debugPrint('Widget 已销毁');
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Container();
+  }
+}
 ```
 
-#### ScrollControllerObserver
-简化 `ScrollController` 的创建和销毁。
+### 内置观察者
 
-```dart
-_scroll = ScrollControllerObserver(
-  this,
-  initialScrollOffset: 0.0,
-  keepScrollOffset: true,
-);
-```
+本库提供三类内置观察者：`Base`、`Widget` 和 `Anim`。
 
-#### TabControllerObserver
-简化 `TabController` 的创建和销毁。
-需要 `TickerProvider`。
+#### 1. Base 观察者 (`observer/base.dart`)
 
-```dart
-_tab = TabControllerObserver(
-  this,
-  length: 3,
-  initialIndex: 0,
-);
-```
+用于数据和异步操作的通用观察者。
 
-#### TextEditingControllerObserver
-简化 `TextEditingController` 的创建和销毁。
+- **`ListenableObserver`**: 监听任意 `Listenable`（如 `ValueNotifier`、`ChangeNotifier`），当通知时重建 Widget。
+- **`FutureObserver<T>`**: 管理 `Future`，将当前状态暴露为 `AsyncSnapshot`。
+- **`StreamObserver<T>`**: 管理 `Stream` 订阅，创建 `AsyncSnapshot` 并处理 active/done 状态。
 
-```dart
-_text = TextEditingControllerObserver(
-  this,
-  text: '初始文本',
-);
-```
+#### 2. Widget 观察者 (`observer/widget.dart`)
+
+简化常见 Flutter 控制器的创建、销毁和管理。
+
+- **`ScrollControllerObserver`**: 管理 `ScrollController`。
+- **`PageControllerObserver`**: 管理 `PageController`。
+- **`TabControllerObserver`**: 管理 `TabController`。需要 `TickerProvider`。
+- **`TextEditingControllerObserver`**: 管理 `TextEditingController`。
+- **`FocusNodeObserver`**: 管理 `FocusNode`。
+
+#### 3. Anim 观察者 (`observer/anim.dart`)
+
+用于动画相关类的观察者。
+
+- **`AnimControllerObserver`**: 管理 `AnimationController`。自动从 Widget 配置同步 `duration` 和 `reverseDuration`。
+- **`AnimationObserver<T>`**: 监听 `Animation<T>` 对象，当值变化时重建 Widget。
+
 
 ### 自定义观察者
 
-你可以通过继承 `LifecycleObserver` 轻松创建自己的观察者。
+你可以通过继承 `LifecycleObserver<V>` 轻松创建自己的观察者。
 
-示例：一个 `UserDataObserver`，它能够：
-1. 在 `onInit` 中初始化数据获取。
-2. 在 `onUpdate` 中当 `userId` 变化时重新获取数据。
-3. 在 `onBuild` 中记录调试信息。
+示例：一个获取数据的 `UserDataObserver`。
 
 ```dart
 import 'package:flutter/material.dart';
@@ -140,8 +144,9 @@ class Data {
   Data(this.id, this.info);
 }
 
+// LifecycleObserver<V>，其中 V 是 ValueNotifier<Data?>
 class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
-  // 获取 Widget 最新参数的机制
+  // 从 Widget 获取最新参数的机制
   final String Function() getUserId;
   
   // 用于追踪变化的内部状态
@@ -152,43 +157,70 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
     required this.getUserId,
   });
 
+  // 1. 创建 target（在构造函数和 key 变化时调用）
   @override
-  void onInit() {
-    target = ValueNotifier(null);
+  ValueNotifier<Data?> buildTarget() {
     _currentUserId = getUserId();
-    _fetchData(_currentUserId);
+    final notifier = ValueNotifier<Data?>(null);
+    _fetchData(_currentUserId, notifier); // 开始获取
+    return notifier;
   }
 
+  // 2. 处理 Widget 更新（如果 key 没有变化）
   @override
-  void onUpdate() {
-    // 检查依赖 (userId) 是否发生变化
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    // 检查依赖 (userId) 是否发生变化，而不触发完整重建（如果没有使用 key）
     final newUserId = getUserId();
     if (newUserId != _currentUserId) {
-      debugPrint('UserId changed from $_currentUserId to $newUserId');
+      debugPrint('UserId 从 $_currentUserId 变为 $newUserId');
       _currentUserId = newUserId;
-      _fetchData(_currentUserId);
+      _fetchData(_currentUserId, target);
     }
   }
 
   @override
   void onBuild(BuildContext context) {
-    debugPrint('Building with user: $_currentUserId');
+    debugPrint('正在构建用户: $_currentUserId');
   }
 
+  // 3. 清理
   @override
-  void onDispose() {
+  void onDisposeTarget(ValueNotifier<Data?> target) {
     target.dispose();
   }
 
-  void _fetchData(String id) async {
+  void _fetchData(String id, ValueNotifier<Data?> notifier) async {
     // 模拟网络请求
     await Future.delayed(const Duration(milliseconds: 500));
-    if (_currentUserId == id) { // 避免竞态条件
-      target.value = Data(id, 'Info for $id');
+    // 简单检查以避免竞态条件（如果观察者已被销毁/重建）
+    if (_currentUserId == id) { 
+      notifier.value = Data(id, 'Info for $id');
     }
   }
 }
 ```
+
+### 使用 `key` 重建 Target
+
+`key` 参数的功能类似于 React 的 `useEffect` 依赖或 Flutter 的 `Key`。
+当 `key` 回调返回的值发生变化时，观察者将：
+1. 销毁当前 `target`（调用 `onDisposeTarget`）。
+2. 重新创建 `target`（调用 `buildTarget`）。
+
+当你的 Controller 依赖于特定属性（如 `userId`）并且需要在该属性变化时完全重置时，这非常有用。
+
+```dart
+_observer = MyObserver(
+  this,
+  // 当 'userId' 变化时，旧的 target 被销毁，新的被构建。
+  key: () => widget.userId, 
+);
+```
+
+> **注意**: 使用 `key` 不是重建 target 的唯一方式。你也可以创建一个新的 Observer 实例。
+
+
 
 ## 与 flutter_hooks 的比较
 
@@ -196,13 +228,9 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
 | :--- | :--- | :--- |
 | **范式** | OOP (类) | 函数式 (Hooks) |
 | **基类** | 标准 `StatefulWidget` | `HookWidget` |
-| **生命周期** | 显式 (`onInit`, `onDispose`) | 隐式 (`useEffect`) |
+| **生命周期** | 显式 (`buildTarget`, `onDispose`) | 隐式 (`useEffect`) |
 | **学习曲线** | 低 (标准 Flutter) | 中 (Hooks 规则) |
 | **黑魔法** | 低 (Mixin + List) | 高 (Element 逻辑) |
-| **条件逻辑** | 随处支持 | 不允许在 `build` 中使用 |
+| **条件逻辑** | 随处支持 | 仅允许在 `build` 中使用 |
 
-### 为什么选择 state_lifecycle_observer?
-- 你更喜欢面向对象编程。
-- 你想坚持使用标准的 `StatefulWidget`。
-- 你不喜欢 "Hooks 规则"（例如，不能使用条件 Hooks）。
-- 你希望对初始化和销毁有显式的控制。
+
