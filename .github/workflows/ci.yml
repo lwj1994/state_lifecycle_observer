@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Install Dependencies
+        timeout-minutes: 2
+        run: |
+          puro flutter --version
+          puro flutter pub get
+
+      - name: 🔎 Check format
+        timeout-minutes: 1
+        run: puro dart format --set-exit-if-changed -l 80 -o none lib/
+
+      - name: 📈 Check analyzer
+        timeout-minutes: 1
+        run: puro flutter analyze --fatal-infos --fatal-warnings lib/
+
+      - name: 🧪 Run tests
+        timeout-minutes: 3
+        run: puro flutter test --coverage
+
+      - name: 📥 Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          fail_ci_if_error: false
+

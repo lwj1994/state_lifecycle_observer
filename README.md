@@ -1,6 +1,7 @@
 # state_lifecycle_observer
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
+[![codecov](https://codecov.io/gh/lwj1994/state_lifecycle_observer/graph/badge.svg)](https://codecov.io/gh/lwj1994/state_lifecycle_observer)
 
 [中文文档](README_zh.md)
 

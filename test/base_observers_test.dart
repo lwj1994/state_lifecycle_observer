@@ -149,5 +149,51 @@ void main() {
 
       expect(state.streamObserver.target.connectionState, ConnectionState.done);
     });
+
+    testWidgets('handles stream error', (tester) async {
+      final controller = StreamController<int>(sync: true);
+      addTearDown(() => controller.close());
+
+      await tester.pumpWidget(
+        BaseTestWidget(
+          stream: controller.stream,
+        ),
+      );
+
+      final state =
+          tester.state<_BaseTestWidgetState>(find.byType(BaseTestWidget));
+
+      controller.addError('stream error', StackTrace.current);
+      await tester.pump();
+
+      expect(
+          state.streamObserver.target.connectionState, ConnectionState.active);
+      expect(state.streamObserver.target.hasError, true);
+      expect(state.streamObserver.target.error, 'stream error');
+    });
+  });
+
+  group('FutureObserver error', () {
+    testWidgets('handles future error', (tester) async {
+      final completer = Completer<int>();
+
+      await tester.pumpWidget(
+        BaseTestWidget(
+          future: completer.future,
+        ),
+      );
+
+      final state =
+          tester.state<_BaseTestWidgetState>(find.byType(BaseTestWidget));
+      expect(
+          state.futureObserver.target.connectionState, ConnectionState.waiting);
+
+      completer.completeError('future error', StackTrace.current);
+      await tester.pump();
+
+      expect(state.futureObserver.target.connectionState, ConnectionState.done);
+      expect(state.futureObserver.target.hasError, true);
+      expect(state.futureObserver.target.error, 'future error');
+    });
   });
 }
