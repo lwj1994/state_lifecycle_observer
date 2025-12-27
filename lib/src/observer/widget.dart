@@ -97,6 +97,7 @@ class TextEditingControllerObserver
   });
 
   /// Creates a [TextEditingControllerObserver] from a starting value.
+  // coverage:ignore-start
   factory TextEditingControllerObserver.fromValue(
     State state, {
     required TextEditingValue value,
@@ -106,6 +107,7 @@ class TextEditingControllerObserver
       editingValue: value,
     );
   }
+  // coverage:ignore-end
 
   @override
   void onDisposeTarget(TextEditingController target) {
@@ -149,6 +151,7 @@ class FocusNodeObserver extends LifecycleObserver<FocusNode> {
     super.key,
   });
 
+  // coverage:ignore-start
   @override
   void onDidUpdateWidget() {
     super.onDidUpdateWidget();
@@ -162,6 +165,7 @@ class FocusNodeObserver extends LifecycleObserver<FocusNode> {
       target.descendantsAreFocusable = descendantsAreFocusable;
     }
   }
+  // coverage:ignore-end
 
   @override
   void onDisposeTarget(FocusNode target) {

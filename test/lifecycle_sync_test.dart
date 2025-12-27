@@ -76,6 +76,24 @@ void main() {
         .state<PrematureAccessWidgetState>(find.byType(PrematureAccessWidget));
     expect(state.errorCaught, isTrue);
   });
+
+  testWidgets('safeSetState does nothing when state is disposed',
+      (tester) async {
+    await tester.pumpWidget(const DisposedStateWidget());
+
+    final state = tester
+        .state<DisposedStateWidgetState>(find.byType(DisposedStateWidget));
+    final observer = state.observer;
+
+    // Dispose the widget
+    await tester.pumpWidget(const SizedBox());
+
+    // Call safeSetState after disposal - should not throw
+    observer.callSafeSetState();
+
+    // Value should remain unchanged
+    expect(observer.target, 0);
+  });
 }
 
 class InitStateWidget extends StatefulWidget {
@@ -140,5 +158,75 @@ class PrematureAccessWidgetState extends State<PrematureAccessWidget>
   Widget build(BuildContext context) {
     super.build(context);
     return Container();
+  }
+}
+
+// Test for safeSetState during build phase (persistentCallbacks)
+class SafeSetStateObserver extends LifecycleObserver<int> {
+  int rebuildCount = 0;
+
+  SafeSetStateObserver(super.state);
+
+  @override
+  int buildTarget() => 0;
+
+  @override
+  void onBuild(BuildContext context) {
+    // Call safeSetState during build. This should defer to postFrameCallback.
+    if (rebuildCount == 0) {
+      safeSetState(() {
+        target = target + 1;
+      });
+    }
+    rebuildCount++;
+  }
+}
+
+class SafeSetStateDuringBuildWidget extends StatefulWidget {
+  const SafeSetStateDuringBuildWidget({super.key});
+  @override
+  SafeSetStateDuringBuildWidgetState createState() =>
+      SafeSetStateDuringBuildWidgetState();
+}
+
+class SafeSetStateDuringBuildWidgetState
+    extends State<SafeSetStateDuringBuildWidget> with LifecycleOwnerMixin {
+  late final observer = SafeSetStateObserver(this);
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Text('${observer.target}');
+  }
+}
+
+// Test for safeSetState when disposed
+class DisposedStateWidget extends StatefulWidget {
+  const DisposedStateWidget({super.key});
+  @override
+  DisposedStateWidgetState createState() => DisposedStateWidgetState();
+}
+
+class DisposedStateObserver extends LifecycleObserver<int> {
+  DisposedStateObserver(super.state);
+
+  @override
+  int buildTarget() => 0;
+
+  void callSafeSetState() {
+    safeSetState(() {
+      target = 999;
+    });
+  }
+}
+
+class DisposedStateWidgetState extends State<DisposedStateWidget>
+    with LifecycleOwnerMixin {
+  late final observer = DisposedStateObserver(this);
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
   }
 }

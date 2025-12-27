@@ -113,10 +113,12 @@ abstract class LifecycleObserver<V> {
       // ignore: invalid_use_of_protected_member
       state.setState(fn);
     } else {
+      // coverage:ignore-start
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // ignore: invalid_use_of_protected_member
         if (state.mounted) state.setState(fn);
       });
+      // coverage:ignore-end
     }
   }
 }

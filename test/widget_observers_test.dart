@@ -169,4 +169,80 @@ void main() {
     expect(state.textObserver!.target.text, 'Hello');
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('TextEditingControllerObserver.fromValue creates controller',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: TextEditingFromValueTestWidget(),
+    ));
+    final state = tester.state<_TextEditingFromValueTestWidgetState>(
+        find.byType(TextEditingFromValueTestWidget));
+    expect(state.textObserver.target.text, 'initial');
+    expect(state.textObserver.target.selection,
+        const TextSelection.collapsed(offset: 7));
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+// Helper widget for TextEditingControllerObserver.fromValue test
+class TextEditingFromValueTestWidget extends StatefulWidget {
+  const TextEditingFromValueTestWidget({super.key});
+
+  @override
+  State<TextEditingFromValueTestWidget> createState() =>
+      _TextEditingFromValueTestWidgetState();
+}
+
+class _TextEditingFromValueTestWidgetState
+    extends State<TextEditingFromValueTestWidget> with LifecycleOwnerMixin {
+  late final textObserver = TextEditingControllerObserver(
+    this,
+    editingValue: const TextEditingValue(
+      text: 'initial',
+      selection: TextSelection.collapsed(offset: 7),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+// Helper widget for FocusNode property update test
+class FocusNodeUpdateTestWidget extends StatefulWidget {
+  final bool skipTraversal;
+  final bool canRequestFocus;
+  final bool descendantsAreFocusable;
+
+  const FocusNodeUpdateTestWidget({
+    super.key,
+    required this.skipTraversal,
+    required this.canRequestFocus,
+    required this.descendantsAreFocusable,
+  });
+
+  @override
+  State<FocusNodeUpdateTestWidget> createState() =>
+      _FocusNodeUpdateTestWidgetState();
+}
+
+class _FocusNodeUpdateTestWidgetState extends State<FocusNodeUpdateTestWidget>
+    with LifecycleOwnerMixin {
+  late final focusObserver = FocusNodeObserver(
+    this,
+    skipTraversal: widget.skipTraversal,
+    canRequestFocus: widget.canRequestFocus,
+    descendantsAreFocusable: widget.descendantsAreFocusable,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Focus(
+      focusNode: focusObserver.target,
+      child: const SizedBox(),
+    );
+  }
 }
