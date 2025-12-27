@@ -13,6 +13,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   // Use raw LifecycleObserver to allow any observer type.
   final List<LifecycleObserver> _observers = [];
   LifecycleState _lifecycleState = LifecycleState.created;
+  get lifecycleState => _lifecycleState;
 
   @override
   void initState() {

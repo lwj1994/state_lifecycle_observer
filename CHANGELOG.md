@@ -1,3 +1,12 @@
+
+## 0.0.4
+
+* **Breaking Change**: Renamed `LifecycleObserverMixin` to `LifecycleOwnerMixin` to better reflect its role.
+* **Breaking Change**: `LifecycleObserver` initialization is now deferred. `target` is available only after `onInitState` is called (which happens automatically). Accessing it prematurely throws `LateInitializationError`.
+* **Enhancement**: Added automatic synchronization for "late" observers. Observers added after `initState` are now immediately initialized to catch up with the lifecycle.
+* **Refactor**: Introduced `LifecycleState` enum (`created`, `initialized`, `disposed`) to track component state.
+* **Fix**: Removed `StateWithObservers` interface in favor of checking against `LifecycleOwnerMixin` directly.
+
 ## 0.0.3
 
 * **Enhancement**: Introduced `safeSetState` in `LifecycleObserver` to handle state updates safely across different scheduler phases.
