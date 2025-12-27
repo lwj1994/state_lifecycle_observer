@@ -1,3 +1,7 @@
+## 0.0.7
+* Update documentation with `addLifecycleCallback` usage examples.
+* Add language switch links between English and Chinese README.
+* Simplify code examples to use `late final` for observer initialization.
 ## 0.0.6
 * Replace `assert` with `StateError` for missing mixin, correct `addLifecyccleCallback` typo.
 
