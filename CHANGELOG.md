@@ -1,9 +1,12 @@
+## 0.0.6
+* Replace `assert` with `StateError` for missing mixin, correct `addLifecyccleCallback` typo.
+
 ## 0.0.5
-* Add `addLifecycleCallback`
+* Add `addLifecyccleCallback`
 ```dart
   void initState() {
     super.initState();
-    addLifecyleCallback(
+    addLifecycleCallback(
       onInitState: () {
         widget.log.onInitState++;
       },
