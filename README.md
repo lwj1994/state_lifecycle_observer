@@ -2,7 +2,7 @@
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
 
-A Flutter package to solve state reuse problems using an Observer pattern inspired by Android's [LifecycleObserver](https://developer.android.com/reference/androidx/lifecycle/LifecycleObserver).
+A Flutter package to solve state reuse problems using an Observer pattern inspired by Android's [LifecycleObserver](https://developer.android.com/reference/androidx/lifecycle/LifecycleObserver) and [LifecycleOwner](https://developer.android.com/reference/androidx/lifecycle/LifecycleOwner).
 
 ## Features
 
