@@ -1,3 +1,8 @@
+## 0.0.8
+* Add project logo and update README documentation.
+* Add CI workflow with GitHub Actions and Codecov integration.
+* Achieve 100% test coverage.
+
 ## 0.0.7
 * Update documentation with `addLifecycleCallback` usage examples.
 * Add language switch links between English and Chinese README.
