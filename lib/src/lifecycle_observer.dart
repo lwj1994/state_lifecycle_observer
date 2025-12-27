@@ -1,12 +1,17 @@
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:state_lifecycle_observer/state_lifecycle_observer.dart';
 
-/// Interface for States that can manage [LifecycleObserver]s.
-///
-/// This interface is typically implemented by [LifecycleObserverMixin].
-abstract class StateWithObservers {
-  /// Registers a [LifecycleObserver] to be managed by this state.
-  void registerObserver(LifecycleObserver observer);
+/// The current lifecycle state of the observer/owner.
+enum LifecycleState {
+  /// The object is created but not yet initialized.
+  created,
+
+  /// The object's [initState] has been called.
+  initialized,
+
+  /// The object's [dispose] has been called.
+  disposed,
 }
 
 /// A base class for observers that manage a specific target object [V].
@@ -31,15 +36,24 @@ abstract class LifecycleObserver<V> {
 
   /// Creates a [LifecycleObserver] attached to the given [state].
   ///
-  /// If the [state] does not mixin [LifecycleObserverMixin], this will throw
+  /// If the [state] does not mixin [LifecycleOwnerMixin], this will throw
   /// an assertion error.
   LifecycleObserver(this.state, {this.key}) {
-    if (state is StateWithObservers) {
-      (state as StateWithObservers).registerObserver(this);
+    if (state is LifecycleOwnerMixin) {
+      (state as LifecycleOwnerMixin).registerObserver(this);
     } else {
       assert(false,
-          'State must mixin LifecycleObserverMixin to use LifecycleObserver');
+          'State must mixin LifecycleOwnerMixin to use LifecycleObserver');
     }
+  }
+
+  /// Called when the observer is initialized.
+  ///
+  /// This is where [target] is built and [currentKey] is set.
+  /// This method is idempotent.
+  @mustCallSuper
+  @protected
+  void onInitState() {
     currentKey = key?.call();
     target = buildTarget();
   }
@@ -51,9 +65,8 @@ abstract class LifecycleObserver<V> {
   @protected
   void onDidUpdateWidget() {
     if (currentKey != key?.call()) {
-      currentKey = key?.call();
       onDisposeTarget(target);
-      target = buildTarget();
+      onInitState();
     }
   }
 

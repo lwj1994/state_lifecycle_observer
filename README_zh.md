@@ -8,7 +8,7 @@
 ## 特性
 
 - **LifecycleObserver**: 用于创建可复用状态观察者的基类。
-- **LifecycleObserverMixin**: 用于在 `State` 中管理观察者生命周期的 mixin。
+- **LifecycleOwnerMixin**: 用于在 `State` 中管理观察者生命周期的 mixin。
 - **常用观察者**:
   - `AnimControllerObserver`: 可复用的 `AnimationController` 逻辑。
   - `ScrollControllerObserver`: 管理 `ScrollController`。
@@ -17,7 +17,7 @@
 
 ## 用法
 
-1. 创建一个 `StatefulWidget` 并混入 `LifecycleObserverMixin`。
+1. 创建一个 `StatefulWidget` 并混入 `LifecycleOwnerMixin`。
 2. 在 `initState` 中实例化观察者。它们会自动注册。
 3. 在 `build` 方法中调用 `super.build(context)`。
 
@@ -31,7 +31,7 @@ class MyLogo extends StatefulWidget {
 }
 
 class _MyLogoState extends State<MyLogo> 
-    with TickerProviderStateMixin, LifecycleObserverMixin<MyLogo> {
+    with TickerProviderStateMixin, LifecycleOwnerMixin<MyLogo> {
   
   late AnimControllerObserver _animObserver;
   late ScrollControllerObserver _scrollObserver;

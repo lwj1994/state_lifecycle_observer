@@ -14,7 +14,7 @@
 ## 0.0.1
 
 * Initial release.
-* Added `LifecycleObserver` base class and `LifecycleObserverMixin`.
+* Added `LifecycleObserver` base class and `LifecycleOwnerMixin`.
 * Included common observers:
   * `AnimControllerObserver` (supports full `AnimationController` params)
   * `ScrollControllerObserver`

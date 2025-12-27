@@ -2,18 +2,18 @@
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
 
-A Flutter package to solve state reuse problems using an Observer pattern.
+A Flutter package to solve state reuse problems using an Observer pattern inspired by Android's [LifecycleObserver](https://developer.android.com/reference/androidx/lifecycle/LifecycleObserver).
 
 ## Features
 
 - **LifecycleObserver**: A base class for creating reusable state observers.
-- **LifecycleObserverMixin**: A mixin to manage the lifecycle of observers within a `State`.
+- **LifecycleOwnerMixin**: A mixin to manage the lifecycle of observers within a `State`.
 - **Built-in Observers**: Classified into **Base**, **Widget**, and **Anim** categories to cover common scenarios.
 
 
 ## Usage
 
-1. Create a `StatefulWidget` and mixin `LifecycleObserverMixin`.
+1. Create a `StatefulWidget` and mixin `LifecycleOwnerMixin`.
 2. Instantiate observers in `initState`. They automatically register themselves.
 3. Call `super.build(context)` in your `build` method.
 
@@ -27,7 +27,7 @@ class MyLogo extends StatefulWidget {
 }
 
 class _MyLogoState extends State<MyLogo> 
-    with TickerProviderStateMixin, LifecycleObserverMixin<MyLogo> {
+    with TickerProviderStateMixin, LifecycleOwnerMixin<MyLogo> {
   
   late AnimControllerObserver _animObserver;
   late ScrollControllerObserver _scrollObserver;

@@ -31,7 +31,7 @@ class WidgetObserversTestWidget extends StatefulWidget {
 }
 
 class _WidgetObserversTestWidgetState extends State<WidgetObserversTestWidget>
-    with TickerProviderStateMixin, LifecycleObserverMixin {
+    with TickerProviderStateMixin, LifecycleOwnerMixin {
   FocusNodeObserver? focusObserver;
   PageControllerObserver? pageObserver;
   ScrollControllerObserver? scrollObserver;

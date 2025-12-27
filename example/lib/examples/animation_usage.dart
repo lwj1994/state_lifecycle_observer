@@ -9,9 +9,7 @@ class AnimationUsageExample extends StatefulWidget {
 }
 
 class _AnimationUsageExampleState extends State<AnimationUsageExample>
-    with
-        TickerProviderStateMixin,
-        LifecycleObserverMixin<AnimationUsageExample> {
+    with TickerProviderStateMixin, LifecycleOwnerMixin<AnimationUsageExample> {
   late AnimationController _controller;
   late Animation<double> _animation;
   // Initialize the observer

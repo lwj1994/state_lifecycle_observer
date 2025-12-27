@@ -17,7 +17,7 @@ class AnimTestWidget extends StatefulWidget {
 }
 
 class _AnimTestWidgetState extends State<AnimTestWidget>
-    with TickerProviderStateMixin, LifecycleObserverMixin {
+    with TickerProviderStateMixin, LifecycleOwnerMixin {
   late AnimControllerObserver animObserver;
 
   @override
@@ -78,7 +78,7 @@ class AnimationObserverTestWidget extends StatefulWidget {
 }
 
 class _AnimationObserverTestWidgetState
-    extends State<AnimationObserverTestWidget> with LifecycleObserverMixin {
+    extends State<AnimationObserverTestWidget> with LifecycleOwnerMixin {
   final TestAnimation animation = TestAnimation();
   late AnimationObserver<double> observer;
 

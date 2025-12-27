@@ -40,7 +40,7 @@ class TestWidget extends StatefulWidget {
   State<TestWidget> createState() => _TestWidgetState();
 }
 
-class _TestWidgetState extends State<TestWidget> with LifecycleObserverMixin {
+class _TestWidgetState extends State<TestWidget> with LifecycleOwnerMixin {
   late TestObserver observer;
 
   @override

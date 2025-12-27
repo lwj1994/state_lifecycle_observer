@@ -9,13 +9,29 @@ import 'lifecycle_observer.dart';
 /// To use this mixin:
 /// 1. Add it to your [State] class.
 /// 2. Call `super.build(context)` within your [build] method.
-mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
-    implements StateWithObservers {
+mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   // Use raw LifecycleObserver to allow any observer type.
   final List<LifecycleObserver> _observers = [];
+  LifecycleState _lifecycleState = LifecycleState.created;
 
   @override
+  void initState() {
+    super.initState();
+    _lifecycleState = LifecycleState.initialized;
+    for (var observer in _observers) {
+      // ignore: invalid_use_of_protected_member
+      observer.onInitState();
+    }
+  }
+
+  /// Registers a [LifecycleObserver] to be managed by this state.
   void registerObserver(LifecycleObserver observer) {
+    // If the state is already initialized, we manually "replay" the initialization
+    // for this new observer so it catches up.
+    if (_lifecycleState == LifecycleState.initialized) {
+      // ignore: invalid_use_of_protected_member
+      observer.onInitState();
+    }
     _observers.add(observer);
   }
 
@@ -31,6 +47,7 @@ mixin LifecycleObserverMixin<T extends StatefulWidget> on State<T>
 
   @override
   void dispose() {
+    _lifecycleState = LifecycleState.disposed;
     for (var observer in _observers) {
       // ignore: invalid_use_of_protected_member
       observer.onDispose();

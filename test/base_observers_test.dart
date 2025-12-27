@@ -22,7 +22,7 @@ class BaseTestWidget extends StatefulWidget {
 }
 
 class _BaseTestWidgetState extends State<BaseTestWidget>
-    with TickerProviderStateMixin, LifecycleObserverMixin {
+    with TickerProviderStateMixin, LifecycleOwnerMixin {
   late FutureObserver<int> futureObserver;
   late StreamObserver<int> streamObserver;
   late ListenableObserver listenableObserver;

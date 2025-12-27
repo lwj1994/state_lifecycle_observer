@@ -9,7 +9,7 @@ class HelloWorldExample extends StatefulWidget {
 }
 
 class _HelloWorldExampleState extends State<HelloWorldExample>
-    with TickerProviderStateMixin, LifecycleObserverMixin<HelloWorldExample> {
+    with TickerProviderStateMixin, LifecycleOwnerMixin<HelloWorldExample> {
   // 1. Declare Observers for Tabs
   late TabControllerObserver _tab;
 

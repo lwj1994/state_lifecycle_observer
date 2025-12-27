@@ -11,7 +11,7 @@ class TimerExample extends StatefulWidget {
 }
 
 class _TimerExampleState extends State<TimerExample>
-    with LifecycleObserverMixin<TimerExample> {
+    with LifecycleOwnerMixin<TimerExample> {
   int _counter = 0;
 
   @override
