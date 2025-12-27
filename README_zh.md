@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" width="120" alt="state_lifecycle_observer logo">
+</p>
+
 # state_lifecycle_observer
 
 [![pub package](https://img.shields.io/pub/v/state_lifecycle_observer.svg)](https://pub.dev/packages/state_lifecycle_observer)
