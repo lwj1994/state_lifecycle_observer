@@ -1,39 +1,38 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-      - develop
   pull_request:
     branches:
       - main
-      - develop
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
       - name: 📦 Install Dependencies
         timeout-minutes: 2
-        run: |
-          puro flutter --version
-          puro flutter pub get
+        run: flutter pub get
 
       - name: 🔎 Check format
         timeout-minutes: 1
-        run: puro dart format --set-exit-if-changed -l 80 -o none lib/
+        run: dart format --set-exit-if-changed -l 80 -o none lib/
 
       - name: 📈 Check analyzer
         timeout-minutes: 1
-        run: puro flutter analyze --fatal-infos --fatal-warnings lib/
+        run: flutter analyze --fatal-infos --fatal-warnings lib/
 
       - name: 🧪 Run tests
         timeout-minutes: 3
-        run: puro flutter test --coverage
+        run: flutter test --coverage
 
       - name: 📥 Upload coverage to Codecov
         uses: codecov/codecov-action@v5
