@@ -103,6 +103,11 @@ abstract class LifecycleObserver<V> {
   /// applied immediately.
   @protected
   void safeSetState(VoidCallback fn) {
+    if (state is LifecycleOwnerMixin &&
+        (state as LifecycleOwnerMixin).lifecycleState ==
+            LifecycleState.disposed) {
+      return;
+    }
     final schedulerPhase = SchedulerBinding.instance.schedulerPhase;
     if (schedulerPhase != SchedulerPhase.persistentCallbacks) {
       // ignore: invalid_use_of_protected_member
