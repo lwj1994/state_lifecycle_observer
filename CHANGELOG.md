@@ -1,3 +1,6 @@
+## 0.1.0
+* **Breaking**: Move `key` change detection from `onDidUpdateWidget` to `onBuild` for better support of late-created observers.
+
 ## 0.0.9
 * Implement Observer composability - observers can create nested observers within any lifecycle method (`onInitState`, `onDidUpdateWidget`, `onBuild`).
 
