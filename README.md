@@ -13,9 +13,11 @@ A Flutter package to solve state reuse problems using an Observer pattern inspir
 
 ## Features
 
-- **LifecycleObserver**: A base class for creating reusable state observers.
-- **LifecycleOwnerMixin**: A mixin to manage the lifecycle of observers within a `State`.
-- **Built-in Observers**: Classified into **Base**, **Widget**, and **Anim** categories to cover common scenarios.
+- **Standard StatefulWidget** - Works with standard `StatefulWidget`, no special base class required
+- **Automatic Resource Cleanup** - Resources are automatically disposed when the widget is disposed
+- **Automatic Rebuild on Key Change** - When `key` value changes, old target is disposed and new target is created
+- **Composable Observers** - Observers can create nested observers within any lifecycle methods
+- **Built-in Observers** - Classified into **Base**, **Widget**, and **Anim** categories to cover common scenarios
 
 
 ## Usage

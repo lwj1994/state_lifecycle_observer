@@ -13,9 +13,11 @@
 
 ## 特性
 
-- **LifecycleObserver**: 用于创建可复用状态观察者的基类。
-- **LifecycleOwnerMixin**: 用于在 `State` 中管理观察者生命周期的 mixin。
-- **内置观察者**: 分为 **Base**、**Widget** 和 **Anim** 三类，覆盖常见场景。
+- **标准 StatefulWidget** - 使用标准 `StatefulWidget`，无需特殊基类
+- **自动资源清理** - 当 Widget 销毁时，资源会自动释放
+- **Key 变化时自动重建** - 当 `key` 值变化时，旧 target 被销毁，新 target 被创建
+- **可组合的观察者** - 观察者可以在生命周期方法中创建嵌套观察者
+- **内置观察者** - 分为 **Base**、**Widget** 和 **Anim** 三类，覆盖常见场景
 
 
 ## 用法
