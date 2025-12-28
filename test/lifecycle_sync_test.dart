@@ -172,6 +172,7 @@ class SafeSetStateObserver extends LifecycleObserver<int> {
 
   @override
   void onBuild(BuildContext context) {
+    super.onBuild(context);
     // Call safeSetState during build. This should defer to postFrameCallback.
     if (rebuildCount == 0) {
       safeSetState(() {
