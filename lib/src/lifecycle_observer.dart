@@ -114,20 +114,20 @@ abstract class LifecycleObserver<V> {
   }
 
   /// Called when the widget configuration updates.
+  @protected
+  void onDidUpdateWidget() {}
+
+  /// Called during the `build` phase of the widget.
   ///
   /// If the [key] has changed, the [target] is disposed and rebuilt.
   @mustCallSuper
   @protected
-  void onDidUpdateWidget() {
+  void onBuild(BuildContext context) {
     if (currentKey != key?.call()) {
       onDisposeTarget(target);
       onInitState();
     }
   }
-
-  /// Called during the `build` phase of the widget.
-  @protected
-  void onBuild(BuildContext context) {}
 
   /// Called when the state is disposed.
   ///

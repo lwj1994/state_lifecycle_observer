@@ -1,6 +1,6 @@
 name: state_lifecycle_observer
 description: "A reusable Flutter state observer pattern implementation."
-version: 0.0.8
+version: 0.0.9
 repository: https://github.com/lwj1994/state_lifecycle_observer
 homepage: https://github.com/lwj1994/state_lifecycle_observer
 issue_tracker: https://github.com/lwj1994/state_lifecycle_observer/issues
