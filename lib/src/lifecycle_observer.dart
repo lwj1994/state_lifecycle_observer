@@ -97,8 +97,10 @@ abstract class LifecycleObserver<V> {
   }
 
   /// Registers a [LifecycleObserver] to be managed by this state.
+  // coverage:ignore-start
   @protected
   void addLifecycleObserver(LifecycleObserver observer) {}
+  // coverage:ignore-end
 
   /// Called when the observer is initialized.
   ///
