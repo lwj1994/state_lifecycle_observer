@@ -88,15 +88,13 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   @mustCallSuper
   void dispose() {
     _lifecycleState = LifecycleState.disposed;
-    // Create a copy to allow nested observer registration during iteration
+    // Create a copy to iterate over while disposing
     for (var observer in List.of(_observers)) {
-      // Run inside a Zone that provides access to addLifecycleObserver,
-      // allowing nested observers to register with this state.
-      runZoned(
-        // ignore: invalid_use_of_protected_member
-        () => observer.onDispose(),
-        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
-      );
+      // Do NOT provide addLifecycleObserver in Zone during dispose -
+      // creating observers during dispose is not allowed as they would
+      // never be properly initialized or disposed.
+      // ignore: invalid_use_of_protected_member
+      observer.onDispose();
     }
     _observers.clear();
     super.dispose();
