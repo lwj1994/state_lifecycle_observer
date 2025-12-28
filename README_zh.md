@@ -226,10 +226,56 @@ _observer = MyObserver(
 > **注意**: 使用 `key` 不是重建 target 的唯一方式。你也可以创建一个新的 Observer 实例。
 
 
+### 可组合的观察者（嵌套观察者）
 
-## 与 flutter_hooks 的比较
+与 React Hooks 类似，`LifecycleObserver` 支持**可组合性** — 一个 Observer 可以在内部创建和管理其他 Observer。这使得强大的复用模式成为可能，复杂的行为可以由更简单的、可组合的构建块构建而成。
 
-| 特性 | state_lifecycle_observer | flutter_hooks |
+#### 工作原理
+
+当一个 Observer 在其生命周期方法（如 `onInitState`）中创建子 Observer 时，子 Observer 会通过 Dart 的 [Zone](https://api.dart.dev/stable/dart-async/Zone-class.html) 机制自动注册到顶层 `State`。这意味着你不需要在每一层嵌套中传递 State 引用。
+
+#### 示例：组合观察者
+
+```dart
+/// 由多个低层级观察者组成的高层级观察者。
+class UserProfileObserver extends LifecycleObserver<void> {
+  late final TextEditingControllerObserver _nameController;
+  late final FutureObserver<UserData> _dataFetcher;
+
+  UserProfileObserver(super.state, {required String Function() userId});
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    // 子观察者会自动注册到顶层 State。
+    // 无需传递 `state` — 它们使用 Zone 查找。
+    _nameController = TextEditingControllerObserver(state);
+    _dataFetcher = FutureObserver(
+      state,
+      future: () => fetchUserData(userId()),
+    );
+  }
+
+  @override
+  void buildTarget() {}
+}
+
+// 用法：只需创建高层级观察者
+class _MyPageState extends State<MyPage> with LifecycleOwnerMixin {
+  late final _profileObserver = UserProfileObserver(this, userId: () => widget.userId);
+  
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    // 所有嵌套的观察者都会被自动管理
+    return ...;
+  }
+}
+```
+
+#### 与 Hooks / flutter_hooks 的比较
+
+| 特性 | state_lifecycle_observer | flutter_hooks / React Hooks |
 | :--- | :--- | :--- |
 | **范式** | OOP (类) | 函数式 (Hooks) |
 | **基类** | 标准 `StatefulWidget` | `HookWidget` |
@@ -237,5 +283,9 @@ _observer = MyObserver(
 | **学习曲线** | 低 (标准 Flutter) | 中 (Hooks 规则) |
 | **黑魔法** | 低 (Mixin + List) | 高 (Element 逻辑) |
 | **条件逻辑** | 随处支持 | 仅允许在 `build` 中使用 |
+| **组合方式** | 在自定义 Observer 中创建 Observer | 在自定义 hook 中调用 hook |
+| **注册机制** | 通过 Zone 自动注册 | 通过 fiber context 自动注册 |
+| **嵌套深度** | 无限制 | 无限制 |
+| **生命周期同步** | 所有嵌套 Observer 跟随父级生命周期 | 所有 hook 跟随组件生命周期 |
 
-
+这种可组合性使 `LifecycleObserver` 在构建可复用、模块化的状态逻辑方面与 hooks 一样灵活。

@@ -1,6 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:state_lifecycle_observer/state_lifecycle_observer.dart';
+
+/// Zone key for accessing the parent's addLifecycleObserver function.
+/// This enables nested observers to register with the top-level State.
+final _addLifecycleObserverZoneKey = Object();
+
+/// Returns the Zone key for addLifecycleObserver.
+/// Used internally by LifecycleOwnerMixin.
+Object get addLifecycleObserverZoneKey => _addLifecycleObserverZoneKey;
 
 /// The current lifecycle state of the observer/owner.
 enum LifecycleState {
@@ -38,14 +48,57 @@ abstract class LifecycleObserver<V> {
   ///
   /// If the [state] does not mixin [LifecycleOwnerMixin], this will throw
   /// an assertion error.
+  ///
+  /// ## Nested Observer Support (Zone-based Registration)
+  ///
+  /// This constructor supports nested observers, where an observer can create
+  /// child observers within its lifecycle methods (e.g., [onInitState]).
+  ///
+  /// When [state] is a [LifecycleOwnerMixin], the observer registers directly.
+  /// When [state] is not a [LifecycleOwnerMixin] (e.g., when creating a nested
+  /// observer inside another observer), the constructor looks up the
+  /// [addLifecycleObserver] function from the current Dart [Zone].
+  ///
+  /// The [LifecycleOwnerMixin] runs all observer lifecycle callbacks inside
+  /// a Zone that provides access to its [addLifecycleObserver] method via
+  /// [addLifecycleObserverZoneKey]. This allows nested observers to register
+  /// with the top-level State without needing a direct reference to it.
+  ///
+  /// **Example:**
+  /// ```dart
+  /// class ParentObserver extends LifecycleObserver<void> {
+  ///   ParentObserver(super.state);
+  ///
+  ///   @override
+  ///   void onInitState() {
+  ///     // This nested observer will register via Zone lookup.
+  ///     ChildObserver(state);
+  ///   }
+  /// }
+  /// ```
   LifecycleObserver(this.state, {this.key}) {
     if (state is LifecycleOwnerMixin) {
+      // Direct registration: state is a LifecycleOwnerMixin.
+      // ignore: invalid_use_of_protected_member
       (state as LifecycleOwnerMixin).addLifecycleObserver(this);
     } else {
-      throw StateError(
-          'State must mixin LifecycleOwnerMixin to use LifecycleObserver');
+      // Zone-based registration: look up addLifecycleObserver from the Zone.
+      // This enables nested observers created inside another observer's
+      // lifecycle methods to register with the top-level State.
+      final addObserver = Zone.current[_addLifecycleObserverZoneKey] as void
+          Function(LifecycleObserver)?;
+      if (addObserver != null) {
+        addObserver(this);
+      } else {
+        throw StateError(
+            'State must mixin LifecycleOwnerMixin to use LifecycleObserver');
+      }
     }
   }
+
+  /// Registers a [LifecycleObserver] to be managed by this state.
+  @protected
+  void addLifecycleObserver(LifecycleObserver observer) {}
 
   /// Called when the observer is initialized.
   ///

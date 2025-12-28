@@ -226,16 +226,66 @@ _observer = MyObserver(
 > **Note**: Using `key` is not strictly necessary to recreate the target. You can create a new Observer instance.
 
 
+### Composable Observers (Nested Observers)
 
-## Comparison with flutter_hooks
+Like React Hooks, `LifecycleObserver` supports **composability** — an Observer can create and manage other Observers internally. This enables powerful reuse patterns where complex behaviors are built from simpler, composable building blocks.
 
-| Feature | state_lifecycle_observer | flutter_hooks |
+#### How It Works
+
+When an Observer creates child Observers within its lifecycle methods (e.g., `onInitState`), the child Observers automatically register with the top-level `State` via Dart's [Zone](https://api.dart.dev/stable/dart-async/Zone-class.html) mechanism. This means you don't need to pass the State reference through every level of nesting.
+
+#### Example: Composing Observers
+
+```dart
+/// A high-level observer composed of multiple lower-level observers.
+class UserProfileObserver extends LifecycleObserver<void> {
+  late final TextEditingControllerObserver _nameController;
+  late final FutureObserver<UserData> _dataFetcher;
+
+  UserProfileObserver(super.state, {required String Function() userId});
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    // Child observers automatically register with the top-level State.
+    // No need to pass `state` — they use Zone lookup.
+    _nameController = TextEditingControllerObserver(state);
+    _dataFetcher = FutureObserver(
+      state,
+      future: () => fetchUserData(userId()),
+    );
+  }
+
+  @override
+  void buildTarget() {}
+}
+
+// Usage: just create the high-level observer
+class _MyPageState extends State<MyPage> with LifecycleOwnerMixin {
+  late final _profileObserver = UserProfileObserver(this, userId: () => widget.userId);
+  
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    // All nested observers are managed automatically
+    return ...;
+  }
+}
+```
+
+#### Comparison with Hooks / flutter_hooks
+
+| Feature | state_lifecycle_observer | flutter_hooks / React Hooks |
 | :--- | :--- | :--- |
 | **Paradigm** | OOP (Classes) | Functional (Hooks) |
 | **Base Class** | Standard `StatefulWidget` | `HookWidget` |
 | **Lifecycle** | Explicit (`buildTarget`, `onDispose`) | Implicit (`useEffect`) |
 | **Learning Curve** | Low (Standard Flutter) | Moderate (Rules of Hooks) |
 | **Magic** | Low (Mixin + List) | High (Element logic) |
-| **Conditional Logic** | Supported anywhere | only allowed in `build` |
+| **Conditional Logic** | Supported anywhere | Only allowed in `build` |
+| **Compose** | Create Observers in Custom Observer | Call hooks inside custom hooks |
+| **Registration** | Automatic via Zone | Automatic via fiber context |
+| **Nesting Depth** | Unlimited | Unlimited |
+| **Lifecycle Sync** | All nested Observers follow parent lifecycle | All hooks follow component lifecycle |
 
-
+This composability makes `LifecycleObserver` as flexible as hooks for building reusable, modular state logic.
