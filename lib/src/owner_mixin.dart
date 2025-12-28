@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'lifecycle_observer.dart';
 
@@ -20,19 +22,31 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   void initState() {
     super.initState();
     _lifecycleState = LifecycleState.initialized;
-    for (var observer in _observers) {
-      // ignore: invalid_use_of_protected_member
-      observer.onInitState();
+    // Create a copy to allow nested observer registration during iteration
+    for (var observer in List.of(_observers)) {
+      // Run inside a Zone that provides access to addLifecycleObserver,
+      // allowing nested observers to register with this state.
+      runZoned(
+        // ignore: invalid_use_of_protected_member
+        () => observer.onInitState(),
+        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
+      );
     }
   }
 
   /// Registers a [LifecycleObserver] to be managed by this state.
+  @protected
   void addLifecycleObserver(LifecycleObserver observer) {
     // If the state is already initialized, we manually "replay" the initialization
     // for this new observer so it catches up.
     if (_lifecycleState == LifecycleState.initialized) {
-      // ignore: invalid_use_of_protected_member
-      observer.onInitState();
+      // Run inside a Zone that provides access to addLifecycleObserver,
+      // allowing nested observers to register with this state.
+      runZoned(
+        // ignore: invalid_use_of_protected_member
+        () => observer.onInitState(),
+        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
+      );
     }
     _observers.add(observer);
   }
@@ -58,10 +72,15 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   @mustCallSuper
   void didUpdateWidget(T oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Automatically trigger sync logic in all observers.
-    for (var observer in _observers) {
-      // ignore: invalid_use_of_protected_member
-      observer.onDidUpdateWidget();
+    // Create a copy to allow nested observer registration during iteration
+    for (var observer in List.of(_observers)) {
+      // Run inside a Zone that provides access to addLifecycleObserver,
+      // allowing nested observers to register with this state.
+      runZoned(
+        // ignore: invalid_use_of_protected_member
+        () => observer.onDidUpdateWidget(),
+        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
+      );
     }
   }
 
@@ -69,9 +88,15 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   @mustCallSuper
   void dispose() {
     _lifecycleState = LifecycleState.disposed;
-    for (var observer in _observers) {
-      // ignore: invalid_use_of_protected_member
-      observer.onDispose();
+    // Create a copy to allow nested observer registration during iteration
+    for (var observer in List.of(_observers)) {
+      // Run inside a Zone that provides access to addLifecycleObserver,
+      // allowing nested observers to register with this state.
+      runZoned(
+        // ignore: invalid_use_of_protected_member
+        () => observer.onDispose(),
+        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
+      );
     }
     _observers.clear();
     super.dispose();
@@ -84,9 +109,15 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   @override
   @mustCallSuper
   Widget build(BuildContext context) {
-    for (var observer in _observers) {
-      // ignore: invalid_use_of_protected_member
-      observer.onBuild(context);
+    // Create a copy to allow nested observer registration during iteration
+    for (var observer in List.of(_observers)) {
+      // Run inside a Zone that provides access to addLifecycleObserver,
+      // allowing nested observers to register with this state.
+      runZoned(
+        // ignore: invalid_use_of_protected_member
+        () => observer.onBuild(context),
+        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
+      );
     }
     return const SizedBox.shrink();
   }
