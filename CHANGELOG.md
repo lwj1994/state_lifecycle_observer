@@ -1,3 +1,21 @@
+## 0.0.9
+* Implement Observer composability - observers can create nested observers within any lifecycle method (`onInitState`, `onDidUpdateWidget`, `onBuild`).
+
+```dart
+class ParentObserver extends LifecycleObserver<void> {
+  ChildObserver? child;
+  
+  ParentObserver(super.state);
+  
+  @override
+  void onInitState() {
+    super.onInitState();
+    // Create nested observers anywhere in lifecycle methods
+    child = ChildObserver(state);
+  }
+}
+```
+
 ## 0.0.8
 * Add project logo and update README documentation.
 * Add CI workflow with GitHub Actions and Codecov integration.
