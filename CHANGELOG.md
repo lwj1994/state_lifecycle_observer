@@ -1,3 +1,11 @@
+## 0.1.1
+* **Critical Fix**: Fixed `ListenableObserver` listener leak when using `key` parameter - listener is now properly re-added in `onInitState()` after key changes trigger target rebuild.
+* **Fix**: Fixed type safety issue in `FutureObserver` and `StreamObserver` - now uses `AsyncSnapshot.nothing()` when `initialData` is null instead of unsafe cast.
+* **Enhancement**: Improved `safeSetState()` scheduler phase check - now only allows `setState` during `idle` phase for better safety.
+* **Enhancement**: Added runtime assertions to `AnimControllerObserver` and `TabControllerObserver` to ensure State mixes in `TickerProvider` with helpful error messages.
+* **Feature**: Added `removeLifecycleObserver()` method to `LifecycleOwnerMixin` for dynamic observer removal.
+* **Enhancement**: Improved error message for Zone-based registration failures with detailed troubleshooting steps.
+
 ## 0.1.0
 * **Breaking**: Move `key` change detection from `onDidUpdateWidget` to `onBuild` for better support of late-created observers.
 

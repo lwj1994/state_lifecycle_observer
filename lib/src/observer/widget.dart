@@ -46,6 +46,9 @@ class ScrollControllerObserver extends LifecycleObserver<ScrollController> {
 }
 
 /// An observer that manages a [TabController].
+///
+/// The [state] parameter must be a [State] that mixes in [TickerProvider]
+/// (e.g., [SingleTickerProviderStateMixin] or [TickerProviderStateMixin]).
 class TabControllerObserver extends LifecycleObserver<TabController> {
   /// The total number of tabs.
   final int length;
@@ -57,12 +60,15 @@ class TabControllerObserver extends LifecycleObserver<TabController> {
   final Duration? animationDuration;
 
   TabControllerObserver(
-    super.state, {
+    State state, {
     required this.length,
     this.initialIndex = 0,
     this.animationDuration,
-    super.key,
-  });
+    Object? Function()? key,
+  }) : assert(state is TickerProvider,
+            'TabControllerObserver requires State to mixin TickerProvider '
+            '(e.g., SingleTickerProviderStateMixin or TickerProviderStateMixin)'),
+       super(state, key: key);
 
   @override
   void onDisposeTarget(TabController target) {
