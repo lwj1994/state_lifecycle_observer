@@ -60,15 +60,15 @@ class TabControllerObserver extends LifecycleObserver<TabController> {
   final Duration? animationDuration;
 
   TabControllerObserver(
-    State state, {
+    super.state, {
     required this.length,
     this.initialIndex = 0,
     this.animationDuration,
-    Object? Function()? key,
-  }) : assert(state is TickerProvider,
+    super.key,
+  }) : assert(
+            state is TickerProvider,
             'TabControllerObserver requires State to mixin TickerProvider '
-            '(e.g., SingleTickerProviderStateMixin or TickerProviderStateMixin)'),
-       super(state, key: key);
+            '(e.g., SingleTickerProviderStateMixin or TickerProviderStateMixin)');
 
   @override
   void onDisposeTarget(TabController target) {
