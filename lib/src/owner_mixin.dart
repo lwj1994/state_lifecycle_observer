@@ -51,6 +51,18 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
     _observers.add(observer);
   }
 
+  /// Removes a [LifecycleObserver] from this state and disposes it.
+  ///
+  /// This is useful when you need to dynamically remove observers
+  /// without disposing the entire State.
+  @protected
+  void removeLifecycleObserver(LifecycleObserver observer) {
+    if (_observers.remove(observer)) {
+      // ignore: invalid_use_of_protected_member
+      observer.onDispose();
+    }
+  }
+
   /// Adds a simple callback-based observer to the state.
   void addLifecycleCallback({
     VoidCallback? onInitState,

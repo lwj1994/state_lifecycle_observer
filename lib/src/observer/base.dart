@@ -11,7 +11,13 @@ class ListenableObserver extends LifecycleObserver<Listenable> {
     super.state, {
     required Listenable listenable,
     super.key,
-  }) : _listenable = listenable {
+  }) : _listenable = listenable;
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    // Add listener in onInitState instead of constructor
+    // to ensure it's re-added when key changes trigger rebuild
     _listenable.addListener(_markNeedsBuild);
   }
 
@@ -50,6 +56,9 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   @override
   AsyncSnapshot<T> buildTarget() {
     _subscribe();
+    if (initialData == null) {
+      return AsyncSnapshot<T>.nothing();
+    }
     return AsyncSnapshot<T>.withData(
       ConnectionState.waiting,
       initialData as T,
@@ -109,6 +118,9 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   @override
   AsyncSnapshot<T> buildTarget() {
     _subscribe();
+    if (initialData == null) {
+      return AsyncSnapshot<T>.nothing();
+    }
     return AsyncSnapshot<T>.withData(
       ConnectionState.waiting,
       initialData as T,

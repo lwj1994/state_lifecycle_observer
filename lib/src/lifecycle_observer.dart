@@ -91,7 +91,12 @@ abstract class LifecycleObserver<V> {
         addObserver(this);
       } else {
         throw StateError(
-            'State must mixin LifecycleOwnerMixin to use LifecycleObserver');
+            'LifecycleObserver creation failed: The provided State does not mixin LifecycleOwnerMixin, '
+            'and no Zone-based registration is available. '
+            'This usually means:\n'
+            '1. Your State class is missing "with LifecycleOwnerMixin<YourWidget>"\n'
+            '2. You are creating an observer outside of lifecycle methods (e.g., in a non-observer constructor)\n'
+            'Please ensure your State mixes in LifecycleOwnerMixin.');
       }
     }
   }
@@ -164,10 +169,12 @@ abstract class LifecycleObserver<V> {
       return;
     }
     final schedulerPhase = SchedulerBinding.instance.schedulerPhase;
-    if (schedulerPhase != SchedulerPhase.persistentCallbacks) {
+    // Only allow setState during idle phase to avoid errors
+    if (schedulerPhase == SchedulerPhase.idle) {
       // ignore: invalid_use_of_protected_member
       state.setState(fn);
     } else {
+      // Defer to post-frame callback for all non-idle phases
       // coverage:ignore-start
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // ignore: invalid_use_of_protected_member
