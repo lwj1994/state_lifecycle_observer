@@ -5,6 +5,9 @@ import '../lifecycle_observer.dart';
 ///
 /// Wraps [AnimationController] creation and disposal.
 /// Supports syncing [duration] and [reverseDuration] on widget updates.
+///
+/// The [state] parameter must be a [State] that mixes in [TickerProvider]
+/// (e.g., [SingleTickerProviderStateMixin] or [TickerProviderStateMixin]).
 class AnimControllerObserver extends LifecycleObserver<AnimationController> {
   /// A closure to retrieve the latest duration from the widget.
   final Duration? Function() duration;
@@ -28,7 +31,7 @@ class AnimControllerObserver extends LifecycleObserver<AnimationController> {
   final String? debugLabel;
 
   AnimControllerObserver(
-    super.state, {
+    State state, {
     required this.duration,
     this.reverseDuration,
     this.value,
@@ -36,8 +39,11 @@ class AnimControllerObserver extends LifecycleObserver<AnimationController> {
     this.upperBound = 1.0,
     this.animationBehavior = AnimationBehavior.normal,
     this.debugLabel,
-    super.key,
-  });
+    Object? Function()? key,
+  }) : assert(state is TickerProvider,
+            'AnimControllerObserver requires State to mixin TickerProvider '
+            '(e.g., SingleTickerProviderStateMixin or TickerProviderStateMixin)'),
+       super(state, key: key);
 
   @override
   void onDidUpdateWidget() {
