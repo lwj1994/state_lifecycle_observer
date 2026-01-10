@@ -39,8 +39,7 @@ class _KeyTestWidgetState extends State<KeyTestWidget>
 }
 
 void main() {
-  testWidgets(
-      'ListenableObserver with key maintains listener after key change',
+  testWidgets('ListenableObserver with key maintains listener after key change',
       (tester) async {
     // 1. Initial render with userId = 1
     await tester.pumpWidget(

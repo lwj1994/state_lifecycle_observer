@@ -31,7 +31,7 @@ class AnimControllerObserver extends LifecycleObserver<AnimationController> {
   final String? debugLabel;
 
   AnimControllerObserver(
-    State state, {
+    super.state, {
     required this.duration,
     this.reverseDuration,
     this.value,
@@ -39,11 +39,11 @@ class AnimControllerObserver extends LifecycleObserver<AnimationController> {
     this.upperBound = 1.0,
     this.animationBehavior = AnimationBehavior.normal,
     this.debugLabel,
-    Object? Function()? key,
-  }) : assert(state is TickerProvider,
+    super.key,
+  }) : assert(
+            state is TickerProvider,
             'AnimControllerObserver requires State to mixin TickerProvider '
-            '(e.g., SingleTickerProviderStateMixin or TickerProviderStateMixin)'),
-       super(state, key: key);
+            '(e.g., SingleTickerProviderStateMixin or TickerProviderStateMixin)');
 
   @override
   void onDidUpdateWidget() {
