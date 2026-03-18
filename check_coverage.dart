@@ -4,12 +4,12 @@ import 'dart:io';
 ///
 /// Combines features of previous scripts:
 /// - Summary table for target files with uncovered lines
-/// - Per-file percentage for `vef.dart` and `view_model.dart`
+/// - Per-file percentage for selected lifecycle files
 /// - Missed line listing for the same files
 void main() {
   final coverageFile = File('coverage/lcov.info');
   if (!coverageFile.existsSync()) {
-    print('lcov.info not found');
+    stdout.writeln('lcov.info not found');
     exit(1);
   }
 

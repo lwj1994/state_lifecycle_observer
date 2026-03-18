@@ -14,8 +14,24 @@ import 'lifecycle_observer.dart';
 mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   // Use raw LifecycleObserver to allow any observer type.
   final List<LifecycleObserver> _observers = [];
+  final Map<LifecycleObserver, Set<LifecycleObserver>> _observerChildren = {};
+  final Map<LifecycleObserver, LifecycleObserver> _observerParents = {};
+  int _observerTeardownDepth = 0;
   LifecycleState _lifecycleState = LifecycleState.created;
   LifecycleState get lifecycleState => _lifecycleState;
+
+  void _runObserverCallback(
+    LifecycleObserver observer,
+    VoidCallback callback,
+  ) {
+    runZoned(
+      callback,
+      zoneValues: {
+        addLifecycleObserverZoneKey: addLifecycleObserver,
+        currentLifecycleObserverZoneKey: observer,
+      },
+    );
+  }
 
   @override
   @mustCallSuper
@@ -24,31 +40,52 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
     _lifecycleState = LifecycleState.initialized;
     // Create a copy to allow nested observer registration during iteration
     for (var observer in List.of(_observers)) {
-      // Run inside a Zone that provides access to addLifecycleObserver,
-      // allowing nested observers to register with this state.
-      runZoned(
-        // ignore: invalid_use_of_protected_member
-        () => observer.onInitState(),
-        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
-      );
+      if (!_observers.contains(observer)) {
+        continue;
+      }
+      try {
+        _runObserverCallback(observer, () {
+          // ignore: invalid_use_of_protected_member
+          observer.onInitState();
+        });
+      } catch (_) {
+        _disposeObserverSubtree(observer, <LifecycleObserver>{});
+        rethrow;
+      }
     }
   }
 
   /// Registers a [LifecycleObserver] to be managed by this state.
   @protected
   void addLifecycleObserver(LifecycleObserver observer) {
+    if (_observers.contains(observer)) {
+      return;
+    }
+    _assertCanRegisterObserver();
+    _observers.add(observer);
+
+    final parent =
+        Zone.current[currentLifecycleObserverZoneKey] as LifecycleObserver?;
+    if (parent != null && parent != observer && _observers.contains(parent)) {
+      _observerParents[observer] = parent;
+      _observerChildren
+          .putIfAbsent(parent, () => <LifecycleObserver>{})
+          .add(observer);
+    }
+
     // If the state is already initialized, we manually "replay" the initialization
     // for this new observer so it catches up.
     if (_lifecycleState == LifecycleState.initialized) {
-      // Run inside a Zone that provides access to addLifecycleObserver,
-      // allowing nested observers to register with this state.
-      runZoned(
-        // ignore: invalid_use_of_protected_member
-        () => observer.onInitState(),
-        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
-      );
+      try {
+        _runObserverCallback(observer, () {
+          // ignore: invalid_use_of_protected_member
+          observer.onInitState();
+        });
+      } catch (_) {
+        _disposeObserverSubtree(observer, <LifecycleObserver>{});
+        rethrow;
+      }
     }
-    _observers.add(observer);
   }
 
   /// Removes a [LifecycleObserver] from this state and disposes it.
@@ -57,9 +94,76 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   /// without disposing the entire State.
   @protected
   void removeLifecycleObserver(LifecycleObserver observer) {
-    if (_observers.remove(observer)) {
-      // ignore: invalid_use_of_protected_member
-      observer.onDispose();
+    _disposeObserverSubtree(observer, <LifecycleObserver>{});
+  }
+
+  /// Disposes any child observers currently composed under [observer].
+  ///
+  /// This is used when an observer rebuilds its own target due to a key change,
+  /// ensuring the entire composed subtree is recreated from a clean state.
+  @protected
+  void disposeLifecycleObserverChildren(LifecycleObserver observer) {
+    final children = List<LifecycleObserver>.of(
+      _observerChildren[observer] ?? const <LifecycleObserver>{},
+    );
+    for (final child in children) {
+      _disposeObserverSubtree(child, <LifecycleObserver>{});
+    }
+  }
+
+  void _disposeObserverSubtree(
+    LifecycleObserver observer,
+    Set<LifecycleObserver> disposedObservers,
+  ) {
+    if (!disposedObservers.add(observer)) {
+      return;
+    }
+    _observerTeardownDepth++;
+    try {
+      final children = List<LifecycleObserver>.of(
+        _observerChildren[observer] ?? const <LifecycleObserver>{},
+      );
+      for (final child in children) {
+        _disposeObserverSubtree(child, disposedObservers);
+      }
+
+      _detachObserverRelations(observer);
+
+      if (_observers.remove(observer)) {
+        try {
+          // ignore: invalid_use_of_protected_member
+          observer.onDispose();
+        } finally {
+          observer.disposeTargetIfNeeded();
+        }
+      }
+    } finally {
+      _observerTeardownDepth--;
+    }
+  }
+
+  void _assertCanRegisterObserver() {
+    if (_lifecycleState == LifecycleState.disposed) {
+      throw StateError(
+          'LifecycleObserver creation failed: State.dispose() has already started. '
+          'Creating observers after disposal is not supported.');
+    }
+    if (_observerTeardownDepth > 0) {
+      throw StateError(
+          'LifecycleObserver creation failed: another observer is currently being disposed. '
+          'Creating observers inside onDispose/removeLifecycleObserver is not supported.');
+    }
+  }
+
+  void _detachObserverRelations(LifecycleObserver observer) {
+    _observerChildren.remove(observer);
+    final parent = _observerParents.remove(observer);
+    if (parent != null) {
+      final siblings = _observerChildren[parent];
+      siblings?.remove(observer);
+      if (siblings != null && siblings.isEmpty) {
+        _observerChildren.remove(parent);
+      }
     }
   }
 
@@ -86,13 +190,11 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
     super.didUpdateWidget(oldWidget);
     // Create a copy to allow nested observer registration during iteration
     for (var observer in List.of(_observers)) {
-      // Run inside a Zone that provides access to addLifecycleObserver,
-      // allowing nested observers to register with this state.
-      runZoned(
-        // ignore: invalid_use_of_protected_member
-        () => observer.onDidUpdateWidget(),
-        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
-      );
+      if (!_observers.contains(observer)) {
+        continue;
+      }
+      // ignore: invalid_use_of_protected_member
+      _runObserverCallback(observer, observer.onDidUpdateWidget);
     }
   }
 
@@ -100,15 +202,22 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   @mustCallSuper
   void dispose() {
     _lifecycleState = LifecycleState.disposed;
-    // Create a copy to iterate over while disposing
-    for (var observer in List.of(_observers)) {
-      // Do NOT provide addLifecycleObserver in Zone during dispose -
-      // creating observers during dispose is not allowed as they would
-      // never be properly initialized or disposed.
-      // ignore: invalid_use_of_protected_member
-      observer.onDispose();
+    final disposedObservers = <LifecycleObserver>{};
+    final roots = List<LifecycleObserver>.of(
+      _observers.where((observer) => !_observerParents.containsKey(observer)),
+    );
+
+    for (final observer in roots) {
+      _disposeObserverSubtree(observer, disposedObservers);
     }
+
+    for (final observer in List.of(_observers)) {
+      _disposeObserverSubtree(observer, disposedObservers);
+    }
+
     _observers.clear();
+    _observerChildren.clear();
+    _observerParents.clear();
     super.dispose();
   }
 
@@ -121,13 +230,11 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   Widget build(BuildContext context) {
     // Create a copy to allow nested observer registration during iteration
     for (var observer in List.of(_observers)) {
-      // Run inside a Zone that provides access to addLifecycleObserver,
-      // allowing nested observers to register with this state.
-      runZoned(
-        // ignore: invalid_use_of_protected_member
-        () => observer.onBuild(context),
-        zoneValues: {addLifecycleObserverZoneKey: addLifecycleObserver},
-      );
+      if (!_observers.contains(observer)) {
+        continue;
+      }
+      // ignore: invalid_use_of_protected_member
+      _runObserverCallback(observer, () => observer.onBuild(context));
     }
     return const SizedBox.shrink();
   }

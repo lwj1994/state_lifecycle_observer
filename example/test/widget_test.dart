@@ -11,20 +11,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:example/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('Gallery navigates to multiple controllers example', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('State Lifecycle Observer Gallery'), findsOneWidget);
+    expect(find.text('Refutation: Multiple Controllers'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.tap(find.text('Refutation: Multiple Controllers'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Multiple Controllers Demo'), findsOneWidget);
+    expect(find.text('Text Controller'), findsOneWidget);
+  });
+
+  testWidgets('Multiple controllers play button stays in sync', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MyApp());
+
+    await tester.tap(find.text('Refutation: Multiple Controllers'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.play_arrow), findsNWidgets(2));
+    expect(find.byIcon(Icons.pause), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.play_arrow).first);
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.byIcon(Icons.pause), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.pause));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.pause), findsNothing);
+    expect(find.byIcon(Icons.play_arrow), findsNWidgets(2));
+
+    await tester.tap(find.byIcon(Icons.play_arrow).first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.byIcon(Icons.pause), findsNothing);
+    expect(find.byIcon(Icons.play_arrow), findsNWidgets(2));
   });
 }

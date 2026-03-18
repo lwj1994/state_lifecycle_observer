@@ -8,9 +8,18 @@ import 'package:state_lifecycle_observer/state_lifecycle_observer.dart';
 /// This enables nested observers to register with the top-level State.
 final _addLifecycleObserverZoneKey = Object();
 
+/// Zone key for tracking the currently executing observer.
+///
+/// This lets the owner preserve parent-child relationships for composed
+/// observers created inside lifecycle callbacks.
+final _currentLifecycleObserverZoneKey = Object();
+
 /// Returns the Zone key for addLifecycleObserver.
 /// Used internally by LifecycleOwnerMixin.
 Object get addLifecycleObserverZoneKey => _addLifecycleObserverZoneKey;
+
+/// Returns the Zone key for the currently executing observer.
+Object get currentLifecycleObserverZoneKey => _currentLifecycleObserverZoneKey;
 
 /// The current lifecycle state of the observer/owner.
 enum LifecycleState {
@@ -32,6 +41,7 @@ enum LifecycleState {
 abstract class LifecycleObserver<V> {
   /// The managed target object, such as a controller.
   late V target;
+  bool _hasTarget = false;
 
   /// The [State] object that this observer is attached to.
   final State state;
@@ -47,7 +57,7 @@ abstract class LifecycleObserver<V> {
   /// Creates a [LifecycleObserver] attached to the given [state].
   ///
   /// If the [state] does not mixin [LifecycleOwnerMixin], this will throw
-  /// an assertion error.
+  /// a [StateError].
   ///
   /// ## Nested Observer Support (Zone-based Registration)
   ///
@@ -116,6 +126,7 @@ abstract class LifecycleObserver<V> {
   void onInitState() {
     currentKey = key?.call();
     target = buildTarget();
+    _hasTarget = true;
   }
 
   /// Called when the widget configuration updates.
@@ -129,8 +140,25 @@ abstract class LifecycleObserver<V> {
   @protected
   void onBuild(BuildContext context) {
     if (currentKey != key?.call()) {
-      onDisposeTarget(target);
-      onInitState();
+      if (state is LifecycleOwnerMixin) {
+        // ignore: invalid_use_of_protected_member
+        (state as LifecycleOwnerMixin).disposeLifecycleObserverChildren(this);
+      }
+      if (_hasTarget) {
+        onDisposeTarget(target);
+        _hasTarget = false;
+      }
+      try {
+        onInitState();
+      } catch (_) {
+        if (state is LifecycleOwnerMixin) {
+          // Remove the observer entirely so a failed re-init cannot leave
+          // a partially rebuilt subtree registered for later frames.
+          // ignore: invalid_use_of_protected_member
+          (state as LifecycleOwnerMixin).removeLifecycleObserver(this);
+        }
+        rethrow;
+      }
     }
   }
 
@@ -140,7 +168,19 @@ abstract class LifecycleObserver<V> {
   @mustCallSuper
   @protected
   void onDispose() {
+    disposeTargetIfNeeded();
+  }
+
+  /// Ensures the current [target] is disposed at most once.
+  ///
+  /// Used internally by [LifecycleOwnerMixin] to guarantee cleanup even when
+  /// an observer override throws before reaching `super.onDispose()`.
+  void disposeTargetIfNeeded() {
+    if (!_hasTarget) {
+      return;
+    }
     onDisposeTarget(target);
+    _hasTarget = false;
   }
 
   /// Override this method to perform cleanup for the [target].
@@ -163,18 +203,21 @@ abstract class LifecycleObserver<V> {
   /// applied immediately.
   @protected
   void safeSetState(VoidCallback fn) {
+    if (!state.mounted) {
+      return;
+    }
     if (state is LifecycleOwnerMixin &&
         (state as LifecycleOwnerMixin).lifecycleState ==
             LifecycleState.disposed) {
       return;
     }
     final schedulerPhase = SchedulerBinding.instance.schedulerPhase;
-    // Only allow setState during idle phase to avoid errors
-    if (schedulerPhase == SchedulerPhase.idle) {
+    // Only defer while Flutter is actively building/layouting/painting.
+    if (schedulerPhase != SchedulerPhase.persistentCallbacks) {
       // ignore: invalid_use_of_protected_member
       state.setState(fn);
     } else {
-      // Defer to post-frame callback for all non-idle phases
+      // Defer until the current frame has finished rendering.
       // coverage:ignore-start
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // ignore: invalid_use_of_protected_member

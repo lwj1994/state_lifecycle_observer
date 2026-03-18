@@ -10,7 +10,9 @@ class MultipleControllersExample extends StatefulWidget {
 }
 
 class _MultipleControllersExampleState extends State<MultipleControllersExample>
-    with TickerProviderStateMixin {
+    with
+        TickerProviderStateMixin,
+        LifecycleOwnerMixin<MultipleControllersExample> {
   // 1. Refute "creating two AnimationControllers is impossible":
   // We can create multiple observers. Each one requests a Ticker from the state.
   // Since we mixin [TickerProviderStateMixin] (not SingleTickerProviderStateMixin),
@@ -35,6 +37,7 @@ class _MultipleControllersExampleState extends State<MultipleControllersExample>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Multiple Controllers Demo')),
       body: Padding(
@@ -74,15 +77,22 @@ class _MultipleControllersExampleState extends State<MultipleControllersExample>
                 LinearProgressIndicator(value: controller.value),
           ),
         ),
-        IconButton(
-          onPressed: () {
-            if (controller.isAnimating) {
-              controller.stop();
-            } else {
-              controller.forward(from: 0);
-            }
-          },
-          icon: Icon(controller.isAnimating ? Icons.pause : Icons.play_arrow),
+        AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) => IconButton(
+            onPressed: () {
+              setState(() {
+                if (controller.isAnimating) {
+                  controller.stop();
+                } else {
+                  controller.forward(from: 0);
+                }
+              });
+            },
+            icon: Icon(
+              controller.isAnimating ? Icons.pause : Icons.play_arrow,
+            ),
+          ),
         ),
       ],
     );

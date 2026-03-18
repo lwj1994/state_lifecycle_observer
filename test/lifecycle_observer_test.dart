@@ -251,6 +251,148 @@ void main() {
   });
 
   testWidgets(
+      'removeLifecycleObserver disposes composed child observers recursively',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: RemovableComposedObserverWidget(),
+    ));
+
+    final state = tester.state<_RemovableComposedObserverWidgetState>(
+        find.byType(RemovableComposedObserverWidget));
+
+    expect(state.parentObserver.childObserver, isNotNull);
+    expect(state.parentObserver.childObserver!.target.isDisposed, isFalse);
+
+    final initialBuildCount = state.parentObserver.childObserver!.buildCount;
+    state.triggerRebuild();
+    await tester.pump();
+    expect(
+        state.parentObserver.childObserver!.buildCount, initialBuildCount + 1);
+
+    state.removeParentObserver();
+
+    expect(state.parentObserver.target.isDisposed, isTrue);
+    expect(state.parentObserver.childObserver!.target.isDisposed, isTrue);
+
+    final buildCountAfterRemoval =
+        state.parentObserver.childObserver!.buildCount;
+    state.triggerRebuild();
+    await tester.pump();
+
+    expect(
+      state.parentObserver.childObserver!.buildCount,
+      buildCountAfterRemoval,
+    );
+  });
+
+  testWidgets(
+      'key change recreates composed child observers without keeping stale ones',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: KeyedComposedObserverWidget(version: 1),
+    ));
+
+    final state = tester.state<_KeyedComposedObserverWidgetState>(
+        find.byType(KeyedComposedObserverWidget));
+
+    final oldChild = state.parentObserver.childObserver!;
+    final oldBuildCount = oldChild.buildCount;
+
+    await tester.pumpWidget(const MaterialApp(
+      home: KeyedComposedObserverWidget(version: 2),
+    ));
+
+    expect(oldChild.target.isDisposed, isTrue);
+    expect(oldChild.buildCount, oldBuildCount);
+    expect(state.parentObserver.childObserver, isNot(same(oldChild)));
+
+    final newChild = state.parentObserver.childObserver!;
+    state.triggerRebuild();
+    await tester.pump();
+
+    expect(oldChild.buildCount, oldBuildCount);
+    expect(newChild.buildCount, 1);
+  });
+
+  testWidgets(
+      'failed observer initialization does not leave broken observer registered',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: FailingObserverWidget(),
+    ));
+
+    expect(tester.takeException(), isStateError);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'failed key-based reinitialization disposes partial observer subtree',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: FailingKeyRebuildWidget(version: 1, shouldThrow: false),
+    ));
+
+    final state = tester.state<_FailingKeyRebuildWidgetState>(
+        find.byType(FailingKeyRebuildWidget));
+    final originalChild = state.parentObserver.childObserver!;
+
+    await tester.pumpWidget(const MaterialApp(
+      home: FailingKeyRebuildWidget(version: 2, shouldThrow: true),
+    ));
+
+    expect(tester.takeException(), isStateError);
+
+    final failedChild = state.parentObserver.childObserver!;
+    expect(failedChild, isNot(same(originalChild)));
+    expect(state.parentObserver.target.isDisposed, isTrue);
+    expect(failedChild.target.isDisposed, isTrue);
+
+    final buildCountAfterFailure = failedChild.buildCount;
+    state.triggerRebuild();
+    await tester.pump();
+
+    expect(failedChild.buildCount, buildCountAfterFailure);
+  });
+
+  testWidgets(
+      'creating an observer during removeLifecycleObserver teardown throws and still disposes target',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: TeardownRegistrationWidget(),
+    ));
+
+    final state = tester.state<_TeardownRegistrationWidgetState>(
+        find.byType(TeardownRegistrationWidget));
+
+    expect(() => state.removeObserver(), throwsStateError);
+    expect(state.observer.target.isDisposed, isTrue);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('creating an observer after owner disposal throws StateError',
+      (WidgetTester tester) async {
+    late _DisposedOwnerWidgetState state;
+
+    await tester.pumpWidget(MaterialApp(
+      home: _DisposedOwnerWidget(
+        onReady: (ownerState) {
+          state = ownerState;
+        },
+      ),
+    ));
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+
+    expect(state.mounted, isFalse);
+    expect(() => ChildObserver(state), throwsStateError);
+  });
+
+  testWidgets(
       'Zone-based registration - observer with non-mixin State inside Zone',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(
@@ -338,6 +480,117 @@ class ChildObserver extends LifecycleObserver<TestController> {
   void onDisposeTarget(TestController target) {
     target.dispose();
   }
+}
+
+class TrackingChildObserver extends LifecycleObserver<TestController> {
+  int buildCount = 0;
+
+  TrackingChildObserver(super.state);
+
+  @override
+  TestController buildTarget() => TestController(500);
+
+  @override
+  void onBuild(BuildContext context) {
+    super.onBuild(context);
+    buildCount++;
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class RemovableParentObserver extends LifecycleObserver<TestController> {
+  TrackingChildObserver? childObserver;
+
+  RemovableParentObserver(super.state);
+
+  @override
+  TestController buildTarget() => TestController(450);
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    childObserver = TrackingChildObserver(state);
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class KeyedParentObserver extends LifecycleObserver<TestController> {
+  TrackingChildObserver? childObserver;
+
+  KeyedParentObserver(
+    super.state, {
+    super.key,
+  });
+
+  @override
+  TestController buildTarget() => TestController((key?.call() as int?) ?? 600);
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    childObserver = TrackingChildObserver(state);
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class FailingObserver extends LifecycleObserver<TestController> {
+  FailingObserver(super.state);
+
+  @override
+  TestController buildTarget() {
+    throw StateError('init failed');
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class FailingRebuildParentObserver extends LifecycleObserver<TestController> {
+  final bool Function() shouldThrow;
+  TrackingChildObserver? childObserver;
+
+  FailingRebuildParentObserver(
+    super.state, {
+    required this.shouldThrow,
+    super.key,
+  });
+
+  @override
+  TestController buildTarget() => TestController(700);
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    childObserver = TrackingChildObserver(state);
+    if (shouldThrow()) {
+      throw StateError('rebuild failed');
+    }
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class TeardownRegistrationObserver extends LifecycleObserver<TestController> {
+  TeardownRegistrationObserver(super.state);
+
+  @override
+  TestController buildTarget() => TestController(800);
+
+  @override
+  void onDispose() {
+    ChildObserver(state);
+    super.onDispose();
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
 }
 
 class ComposingObserverWidget extends StatefulWidget {
@@ -451,6 +704,164 @@ class _OnBuildWidgetState extends State<OnBuildWidget>
   Widget build(BuildContext context) {
     super.build(context);
     return Container();
+  }
+}
+
+class RemovableComposedObserverWidget extends StatefulWidget {
+  const RemovableComposedObserverWidget({super.key});
+
+  @override
+  State<RemovableComposedObserverWidget> createState() =>
+      _RemovableComposedObserverWidgetState();
+}
+
+class _RemovableComposedObserverWidgetState
+    extends State<RemovableComposedObserverWidget> with LifecycleOwnerMixin {
+  late final RemovableParentObserver parentObserver =
+      RemovableParentObserver(this);
+
+  void removeParentObserver() {
+    removeLifecycleObserver(parentObserver);
+  }
+
+  void triggerRebuild() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class KeyedComposedObserverWidget extends StatefulWidget {
+  final int version;
+
+  const KeyedComposedObserverWidget({
+    super.key,
+    required this.version,
+  });
+
+  @override
+  State<KeyedComposedObserverWidget> createState() =>
+      _KeyedComposedObserverWidgetState();
+}
+
+class _KeyedComposedObserverWidgetState
+    extends State<KeyedComposedObserverWidget> with LifecycleOwnerMixin {
+  late final KeyedParentObserver parentObserver = KeyedParentObserver(
+    this,
+    key: () => widget.version,
+  );
+
+  void triggerRebuild() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class FailingObserverWidget extends StatefulWidget {
+  const FailingObserverWidget({super.key});
+
+  @override
+  State<FailingObserverWidget> createState() => _FailingObserverWidgetState();
+}
+
+class _FailingObserverWidgetState extends State<FailingObserverWidget>
+    with LifecycleOwnerMixin {
+  @override
+  void initState() {
+    super.initState();
+    FailingObserver(this);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class FailingKeyRebuildWidget extends StatefulWidget {
+  final int version;
+  final bool shouldThrow;
+
+  const FailingKeyRebuildWidget({
+    super.key,
+    required this.version,
+    required this.shouldThrow,
+  });
+
+  @override
+  State<FailingKeyRebuildWidget> createState() =>
+      _FailingKeyRebuildWidgetState();
+}
+
+class _FailingKeyRebuildWidgetState extends State<FailingKeyRebuildWidget>
+    with LifecycleOwnerMixin {
+  late final FailingRebuildParentObserver parentObserver =
+      FailingRebuildParentObserver(
+    this,
+    shouldThrow: () => widget.shouldThrow,
+    key: () => widget.version,
+  );
+
+  void triggerRebuild() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class TeardownRegistrationWidget extends StatefulWidget {
+  const TeardownRegistrationWidget({super.key});
+
+  @override
+  State<TeardownRegistrationWidget> createState() =>
+      _TeardownRegistrationWidgetState();
+}
+
+class _TeardownRegistrationWidgetState extends State<TeardownRegistrationWidget>
+    with LifecycleOwnerMixin {
+  late final TeardownRegistrationObserver observer =
+      TeardownRegistrationObserver(this);
+
+  void removeObserver() => removeLifecycleObserver(observer);
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class _DisposedOwnerWidget extends StatefulWidget {
+  final void Function(_DisposedOwnerWidgetState state) onReady;
+
+  const _DisposedOwnerWidget({
+    required this.onReady,
+  });
+
+  @override
+  State<_DisposedOwnerWidget> createState() => _DisposedOwnerWidgetState();
+}
+
+class _DisposedOwnerWidgetState extends State<_DisposedOwnerWidget>
+    with LifecycleOwnerMixin {
+  @override
+  void initState() {
+    super.initState();
+    widget.onReady(this);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
   }
 }
 

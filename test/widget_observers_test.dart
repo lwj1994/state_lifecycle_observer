@@ -182,6 +182,56 @@ void main() {
         const TextSelection.collapsed(offset: 7));
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('FocusNodeObserver syncs latest widget properties',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: FocusNodeUpdateTestWidget(
+        skipTraversal: false,
+        canRequestFocus: true,
+        descendantsAreFocusable: true,
+      ),
+    ));
+
+    final state = tester.state<_FocusNodeUpdateTestWidgetState>(
+        find.byType(FocusNodeUpdateTestWidget));
+
+    expect(state.focusObserver.target.skipTraversal, isFalse);
+    expect(state.focusObserver.target.canRequestFocus, isTrue);
+    expect(state.focusObserver.target.descendantsAreFocusable, isTrue);
+
+    await tester.pumpWidget(const MaterialApp(
+      home: FocusNodeUpdateTestWidget(
+        skipTraversal: true,
+        canRequestFocus: false,
+        descendantsAreFocusable: false,
+      ),
+    ));
+
+    expect(state.focusObserver.target.skipTraversal, isTrue);
+    expect(state.focusObserver.target.canRequestFocus, isFalse);
+    expect(state.focusObserver.target.descendantsAreFocusable, isFalse);
+  });
+
+  testWidgets('TextEditingControllerObserver uses latest getter on key rebuild',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: DynamicTextControllerWidget(version: 1, text: 'alpha'),
+    ));
+
+    final state = tester.state<_DynamicTextControllerWidgetState>(
+        find.byType(DynamicTextControllerWidget));
+    final oldController = state.textObserver.target;
+
+    expect(oldController.text, 'alpha');
+
+    await tester.pumpWidget(const MaterialApp(
+      home: DynamicTextControllerWidget(version: 2, text: 'beta'),
+    ));
+
+    expect(state.textObserver.target.text, 'beta');
+    expect(state.textObserver.target, isNot(same(oldController)));
+  });
 }
 
 // Helper widget for TextEditingControllerObserver.fromValue test
@@ -232,9 +282,9 @@ class _FocusNodeUpdateTestWidgetState extends State<FocusNodeUpdateTestWidget>
     with LifecycleOwnerMixin {
   late final focusObserver = FocusNodeObserver(
     this,
-    skipTraversal: widget.skipTraversal,
-    canRequestFocus: widget.canRequestFocus,
-    descendantsAreFocusable: widget.descendantsAreFocusable,
+    skipTraversalGetter: () => widget.skipTraversal,
+    canRequestFocusGetter: () => widget.canRequestFocus,
+    descendantsAreFocusableGetter: () => widget.descendantsAreFocusable,
   );
 
   @override
@@ -244,5 +294,35 @@ class _FocusNodeUpdateTestWidgetState extends State<FocusNodeUpdateTestWidget>
       focusNode: focusObserver.target,
       child: const SizedBox(),
     );
+  }
+}
+
+class DynamicTextControllerWidget extends StatefulWidget {
+  final int version;
+  final String text;
+
+  const DynamicTextControllerWidget({
+    super.key,
+    required this.version,
+    required this.text,
+  });
+
+  @override
+  State<DynamicTextControllerWidget> createState() =>
+      _DynamicTextControllerWidgetState();
+}
+
+class _DynamicTextControllerWidgetState
+    extends State<DynamicTextControllerWidget> with LifecycleOwnerMixin {
+  late final textObserver = TextEditingControllerObserver(
+    this,
+    textGetter: () => widget.text,
+    key: () => widget.version,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Text(textObserver.target.text);
   }
 }

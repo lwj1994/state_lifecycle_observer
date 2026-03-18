@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:state_lifecycle_observer/state_lifecycle_observer.dart';
 
@@ -196,4 +196,89 @@ void main() {
       expect(state.futureObserver.target.error, 'future error');
     });
   });
+
+  group('FutureObserver getters', () {
+    testWidgets(
+        'uses latest future and ignores stale completion after key change',
+        (tester) async {
+      final firstCompleter = Completer<int>();
+      final secondCompleter = Completer<int>();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DynamicFutureWidget(
+            version: 1,
+            future: firstCompleter.future,
+            initialData: 1,
+          ),
+        ),
+      );
+
+      final state = tester
+          .state<_DynamicFutureWidgetState>(find.byType(DynamicFutureWidget));
+
+      expect(
+          state.futureObserver.target.connectionState, ConnectionState.waiting);
+      expect(state.futureObserver.target.data, 1);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DynamicFutureWidget(
+            version: 2,
+            future: secondCompleter.future,
+            initialData: 2,
+          ),
+        ),
+      );
+
+      expect(
+          state.futureObserver.target.connectionState, ConnectionState.waiting);
+      expect(state.futureObserver.target.data, 2);
+
+      firstCompleter.complete(100);
+      await tester.pump();
+
+      expect(
+          state.futureObserver.target.connectionState, ConnectionState.waiting);
+      expect(state.futureObserver.target.data, 2);
+
+      secondCompleter.complete(200);
+      await tester.pump();
+
+      expect(state.futureObserver.target.connectionState, ConnectionState.done);
+      expect(state.futureObserver.target.data, 200);
+    });
+  });
+}
+
+class DynamicFutureWidget extends StatefulWidget {
+  final int version;
+  final Future<int>? future;
+  final int? initialData;
+
+  const DynamicFutureWidget({
+    super.key,
+    required this.version,
+    required this.future,
+    required this.initialData,
+  });
+
+  @override
+  State<DynamicFutureWidget> createState() => _DynamicFutureWidgetState();
+}
+
+class _DynamicFutureWidgetState extends State<DynamicFutureWidget>
+    with LifecycleOwnerMixin {
+  late final FutureObserver<int> futureObserver = FutureObserver(
+    this,
+    futureGetter: () => widget.future,
+    initialDataGetter: () => widget.initialData,
+    key: () => widget.version,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
 }

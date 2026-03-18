@@ -149,4 +149,54 @@ void main() {
     // Dispose
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('AnimationObserver stays in sync with transient frame updates',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const Directionality(
+      textDirection: TextDirection.ltr,
+      child: FrameSynchronizedAnimationWidget(),
+    ));
+
+    expect(find.text('0.00'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final text = tester.widget<Text>(find.byType(Text));
+    final value = double.parse(text.data!);
+    expect(value, greaterThan(0.0));
+  });
+}
+
+class FrameSynchronizedAnimationWidget extends StatefulWidget {
+  const FrameSynchronizedAnimationWidget({super.key});
+
+  @override
+  State<FrameSynchronizedAnimationWidget> createState() =>
+      _FrameSynchronizedAnimationWidgetState();
+}
+
+class _FrameSynchronizedAnimationWidgetState
+    extends State<FrameSynchronizedAnimationWidget>
+    with TickerProviderStateMixin, LifecycleOwnerMixin {
+  late final AnimationController controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 100),
+  )..forward();
+
+  late final AnimationObserver<double> observer = AnimationObserver(
+    this,
+    animation: controller,
+  );
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Text(observer.target.toStringAsFixed(2));
+  }
 }

@@ -6,19 +6,44 @@ import 'package:state_lifecycle_observer/src/lifecycle_observer.dart';
 /// or [ValueNotifier])
 /// and triggers a rebuild when the value changes.
 class ListenableObserver extends LifecycleObserver<Listenable> {
-  final Listenable _listenable;
+  final Listenable? _initialListenable;
+  final Listenable Function()? _listenableGetter;
+
   ListenableObserver(
     super.state, {
-    required Listenable listenable,
+    Listenable? listenable,
+    Listenable Function()? listenableGetter,
     super.key,
-  }) : _listenable = listenable;
+  })  : assert(
+          listenable != null || listenableGetter != null,
+          'ListenableObserver requires either listenable or listenableGetter.',
+        ),
+        _initialListenable = listenable,
+        _listenableGetter = listenableGetter;
+
+  Listenable get _listenable =>
+      _listenableGetter?.call() ?? _initialListenable!;
 
   @override
   void onInitState() {
     super.onInitState();
     // Add listener in onInitState instead of constructor
     // to ensure it's re-added when key changes trigger rebuild
-    _listenable.addListener(_markNeedsBuild);
+    target.addListener(_markNeedsBuild);
+  }
+
+  @override
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    if (currentKey != key?.call()) {
+      return;
+    }
+    final nextListenable = _listenable;
+    if (!identical(target, nextListenable)) {
+      target.removeListener(_markNeedsBuild);
+      target = nextListenable;
+      target.addListener(_markNeedsBuild);
+    }
   }
 
   @override
@@ -41,48 +66,81 @@ class ListenableObserver extends LifecycleObserver<Listenable> {
 /// It exposes the state of the future as an [AsyncSnapshot].
 class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   /// The future to observe.
-  final Future<T>? future;
+  final Future<T>? _initialFuture;
+  final Future<T>? Function()? _futureGetter;
 
   /// The initial data to use before the future completes.
-  final T? initialData;
+  final T? _initialDataValue;
+  final T? Function()? _initialDataGetter;
 
   FutureObserver(
     super.state, {
-    this.future,
-    this.initialData,
+    Future<T>? future,
+    Future<T>? Function()? futureGetter,
+    T? initialData,
+    T? Function()? initialDataGetter,
     super.key,
-  });
+  })  : _initialFuture = future,
+        _futureGetter = futureGetter,
+        _initialDataValue = initialData,
+        _initialDataGetter = initialDataGetter;
+
+  Future<T>? get future => _futureGetter?.call() ?? _initialFuture;
+  T? get initialData => _initialDataGetter?.call() ?? _initialDataValue;
 
   @override
   AsyncSnapshot<T> buildTarget() {
-    _subscribe();
-    if (initialData == null) {
-      return AsyncSnapshot<T>.nothing();
-    }
-    return AsyncSnapshot<T>.withData(
-      ConnectionState.waiting,
-      initialData as T,
-    );
+    return _snapshotForCurrentFuture();
   }
 
   Future<T>? _activeFuture;
 
-  void _subscribe() {
-    if (future == _activeFuture) return;
-    _activeFuture = future;
+  @override
+  void onInitState() {
+    super.onInitState();
+    _subscribe();
+  }
 
-    if (future == null) {
+  @override
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    if (currentKey != key?.call()) {
+      return;
+    }
+    if (future != _activeFuture) {
+      target = _snapshotForCurrentFuture();
+      _subscribe();
+    } else if (target.connectionState == ConnectionState.waiting ||
+        target.connectionState == ConnectionState.none) {
+      target = _snapshotForCurrentFuture();
+    }
+  }
+
+  AsyncSnapshot<T> _snapshotForCurrentFuture() {
+    final data = initialData;
+    final snapshot = data == null
+        ? AsyncSnapshot<T>.nothing()
+        : AsyncSnapshot<T>.withData(ConnectionState.none, data);
+    return future == null ? snapshot : snapshot.inState(ConnectionState.waiting);
+  }
+
+  void _subscribe() {
+    final nextFuture = future;
+    if (nextFuture == _activeFuture) return;
+    _activeFuture = nextFuture;
+
+    if (nextFuture == null) {
       return;
     }
 
-    future!.then((data) {
-      if (_activeFuture == future && state.mounted) {
+    nextFuture.then((data) {
+      if (_activeFuture == nextFuture && state.mounted) {
         safeSetState(() {
           target = AsyncSnapshot<T>.withData(ConnectionState.done, data);
         });
       }
     }, onError: (error, stackTrace) {
-      if (_activeFuture == future && state.mounted) {
+      if (_activeFuture == nextFuture && state.mounted) {
         safeSetState(() {
           target = AsyncSnapshot<T>.withError(
             ConnectionState.done,
@@ -93,6 +151,11 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
       }
     });
   }
+
+  @override
+  void onDisposeTarget(AsyncSnapshot<T> target) {
+    _activeFuture = null;
+  }
 }
 
 /// An observer that manages a [Stream].
@@ -101,37 +164,73 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
 /// handles subscription cancellation.
 class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   /// The stream to observe.
-  final Stream<T>? stream;
+  final Stream<T>? _initialStream;
+  final Stream<T>? Function()? _streamGetter;
 
   /// The initial data to use before the stream emits any value.
-  final T? initialData;
+  final T? _initialDataValue;
+  final T? Function()? _initialDataGetter;
 
   StreamObserver(
     super.state, {
-    this.stream,
-    this.initialData,
+    Stream<T>? stream,
+    Stream<T>? Function()? streamGetter,
+    T? initialData,
+    T? Function()? initialDataGetter,
     super.key,
-  });
+  })  : _initialStream = stream,
+        _streamGetter = streamGetter,
+        _initialDataValue = initialData,
+        _initialDataGetter = initialDataGetter;
+
+  Stream<T>? get stream => _streamGetter?.call() ?? _initialStream;
+  T? get initialData => _initialDataGetter?.call() ?? _initialDataValue;
 
   StreamSubscription<T>? _subscription;
+  Stream<T>? _activeStream;
 
   @override
   AsyncSnapshot<T> buildTarget() {
+    return _snapshotForCurrentStream();
+  }
+
+  @override
+  void onInitState() {
+    super.onInitState();
     _subscribe();
-    if (initialData == null) {
-      return AsyncSnapshot<T>.nothing();
+  }
+
+  @override
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    if (currentKey != key?.call()) {
+      return;
     }
-    return AsyncSnapshot<T>.withData(
-      ConnectionState.waiting,
-      initialData as T,
-    );
+    if (stream != _activeStream) {
+      target = _snapshotForCurrentStream();
+      _subscribe();
+    } else if (target.connectionState == ConnectionState.waiting ||
+        target.connectionState == ConnectionState.none) {
+      target = _snapshotForCurrentStream();
+    }
+  }
+
+  AsyncSnapshot<T> _snapshotForCurrentStream() {
+    final data = initialData;
+    final snapshot = data == null
+        ? AsyncSnapshot<T>.nothing()
+        : AsyncSnapshot<T>.withData(ConnectionState.none, data);
+    return stream == null ? snapshot : snapshot.inState(ConnectionState.waiting);
   }
 
   void _subscribe() {
+    final nextStream = stream;
     _subscription?.cancel();
-    if (stream == null) return;
+    _subscription = null;
+    _activeStream = nextStream;
+    if (nextStream == null) return;
 
-    _subscription = stream!.listen(
+    _subscription = nextStream.listen(
       (data) {
         if (!state.mounted) return;
         safeSetState(() {
@@ -161,5 +260,6 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   void onDisposeTarget(AsyncSnapshot<T> target) {
     _subscription?.cancel();
     _subscription = null;
+    _activeStream = null;
   }
 }
