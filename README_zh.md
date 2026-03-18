@@ -117,6 +117,10 @@ class _MyWidgetState extends State<MyWidget> with LifecycleOwnerMixin {
 - **`FutureObserver<T>`**: 管理 `Future`，将当前状态暴露为 `AsyncSnapshot`。
 - **`StreamObserver<T>`**: 管理 `Stream` 订阅，创建 `AsyncSnapshot` 并处理 active/done 状态。
 
+如果这些输入会在 `initState` 之后变化，优先使用对应的 getter 参数，
+例如 `listenableGetter`、`futureGetter`、`streamGetter`，这样 observer
+始终会读取最新的 widget 配置。
+
 #### 2. Widget 观察者 (`observer/widget.dart`)
 
 简化常见 Flutter 控制器的创建、销毁和管理。
@@ -126,6 +130,10 @@ class _MyWidgetState extends State<MyWidget> with LifecycleOwnerMixin {
 - **`TabControllerObserver`**: 管理 `TabController`。需要 `TickerProvider`。
 - **`TextEditingControllerObserver`**: 管理 `TextEditingController`。
 - **`FocusNodeObserver`**: 管理 `FocusNode`。
+
+如果 controller 的初始参数依赖最新的 widget 值，建议使用对应的
+`...Getter` 参数，例如 `textGetter`、`initialPageGetter`、
+`skipTraversalGetter`。
 
 #### 3. Anim 观察者 (`observer/anim.dart`)
 
@@ -164,7 +172,7 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
     required this.getUserId,
   });
 
-  // 1. 创建 target（在构造函数和 key 变化时调用）
+  // 1. 创建 target（在初始化时和 key 变化时调用）
   @override
   ValueNotifier<Data?> buildTarget() {
     _currentUserId = getUserId();
@@ -188,6 +196,7 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
 
   @override
   void onBuild(BuildContext context) {
+    super.onBuild(context);
     debugPrint('正在构建用户: $_currentUserId');
   }
 
@@ -226,6 +235,17 @@ _observer = MyObserver(
 ```
 
 > **注意**: 使用 `key` 不是重建 target 的唯一方式。你也可以创建一个新的 Observer 实例。
+>
+> 当 target 依赖会变化的 widget 字段时，建议将 `key` 和 getter 参数配合使用，
+> 这样重建后的 target 会读取最新值：
+>
+> ```dart
+> _controller = TextEditingControllerObserver(
+>   this,
+>   textGetter: () => widget.initialText,
+>   key: () => widget.userId,
+> );
+> ```
 
 
 ### 可组合的观察者（嵌套观察者）
@@ -254,7 +274,7 @@ class UserProfileObserver extends LifecycleObserver<void> {
     _nameController = TextEditingControllerObserver(state);
     _dataFetcher = FutureObserver(
       state,
-      future: () => fetchUserData(userId()),
+      futureGetter: () => fetchUserData(userId()),
     );
   }
 

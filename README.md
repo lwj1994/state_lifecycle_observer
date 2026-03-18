@@ -117,6 +117,10 @@ General-purpose observers for data and async operations.
 - **`FutureObserver<T>`**: Manages a `Future`, exposing the current state as an `AsyncSnapshot`.
 - **`StreamObserver<T>`**: Manages a `Stream` subscription, creating an `AsyncSnapshot` and handling active/done states.
 
+When these inputs can change after `initState`, prefer the matching getter
+parameters such as `listenableGetter`, `futureGetter`, or `streamGetter` so the
+observer always reads the latest widget configuration.
+
 #### 2. Widget Observers (`observer/widget.dart`)
 
 Observers that simplify the creation, disposal, and management of common Flutter controllers.
@@ -126,6 +130,10 @@ Observers that simplify the creation, disposal, and management of common Flutter
 - **`TabControllerObserver`**: Manages `TabController`. Requires `TickerProvider`.
 - **`TextEditingControllerObserver`**: Manages `TextEditingController`.
 - **`FocusNodeObserver`**: Manages `FocusNode`.
+
+For controller parameters that depend on the latest widget values, use the
+matching `...Getter` parameters such as `textGetter`, `initialPageGetter`, or
+`skipTraversalGetter`.
 
 #### 3. Anim Observers (`observer/anim.dart`)
 
@@ -164,7 +172,7 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
     required this.getUserId,
   });
 
-  // 1. Create the target (called in constructor and when key changes)
+  // 1. Create the target (called during initialization and when key changes)
   @override
   ValueNotifier<Data?> buildTarget() {
     _currentUserId = getUserId();
@@ -188,6 +196,7 @@ class UserDataObserver extends LifecycleObserver<ValueNotifier<Data?>> {
 
   @override
   void onBuild(BuildContext context) {
+    super.onBuild(context);
     debugPrint('Building with user: $_currentUserId');
   }
 
@@ -226,6 +235,17 @@ _observer = MyObserver(
 ```
 
 > **Note**: Using `key` is not strictly necessary to recreate the target. You can create a new Observer instance.
+>
+> When the target depends on mutable widget fields, pair `key` with getter
+> parameters so the rebuilt target uses the latest values:
+>
+> ```dart
+> _controller = TextEditingControllerObserver(
+>   this,
+>   textGetter: () => widget.initialText,
+>   key: () => widget.userId,
+> );
+> ```
 
 
 ### Composable Observers (Nested Observers)
@@ -254,7 +274,7 @@ class UserProfileObserver extends LifecycleObserver<void> {
     _nameController = TextEditingControllerObserver(state);
     _dataFetcher = FutureObserver(
       state,
-      future: () => fetchUserData(userId()),
+      futureGetter: () => fetchUserData(userId()),
     );
   }
 
