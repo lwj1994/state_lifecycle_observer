@@ -248,6 +248,76 @@ void main() {
       expect(state.futureObserver.target.connectionState, ConnectionState.done);
       expect(state.futureObserver.target.data, 200);
     });
+
+    testWidgets('evaluates getter inputs once per lifecycle update',
+        (tester) async {
+      final firstCompleter = Completer<int>();
+      final secondCompleter = Completer<int>();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CountingFutureWidget(
+            future: firstCompleter.future,
+            initialData: 1,
+          ),
+        ),
+      );
+
+      final state = tester
+          .state<_CountingFutureWidgetState>(find.byType(CountingFutureWidget));
+
+      expect(state.futureGetterCallCount, 1);
+      expect(state.initialDataGetterCallCount, 1);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CountingFutureWidget(
+            future: secondCompleter.future,
+            initialData: 2,
+          ),
+        ),
+      );
+
+      expect(state.futureGetterCallCount, 2);
+      expect(state.initialDataGetterCallCount, 2);
+    });
+  });
+
+  group('StreamObserver getters', () {
+    testWidgets('evaluates getter inputs once per lifecycle update',
+        (tester) async {
+      final firstController = StreamController<int>();
+      final secondController = StreamController<int>();
+      addTearDown(firstController.close);
+      addTearDown(secondController.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CountingStreamWidget(
+            stream: firstController.stream,
+            initialData: 1,
+          ),
+        ),
+      );
+
+      final state = tester
+          .state<_CountingStreamWidgetState>(find.byType(CountingStreamWidget));
+
+      expect(state.streamGetterCallCount, 1);
+      expect(state.initialDataGetterCallCount, 1);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CountingStreamWidget(
+            stream: secondController.stream,
+            initialData: 2,
+          ),
+        ),
+      );
+
+      expect(state.streamGetterCallCount, 2);
+      expect(state.initialDataGetterCallCount, 2);
+    });
   });
 }
 
@@ -275,6 +345,94 @@ class _DynamicFutureWidgetState extends State<DynamicFutureWidget>
     initialDataGetter: () => widget.initialData,
     key: () => widget.version,
   );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class CountingFutureWidget extends StatefulWidget {
+  final Future<int>? future;
+  final int? initialData;
+
+  const CountingFutureWidget({
+    super.key,
+    required this.future,
+    required this.initialData,
+  });
+
+  @override
+  State<CountingFutureWidget> createState() => _CountingFutureWidgetState();
+}
+
+class _CountingFutureWidgetState extends State<CountingFutureWidget>
+    with LifecycleOwnerMixin {
+  int futureGetterCallCount = 0;
+  int initialDataGetterCallCount = 0;
+
+  late final FutureObserver<int> futureObserver;
+
+  @override
+  void initState() {
+    super.initState();
+    futureObserver = FutureObserver(
+      this,
+      futureGetter: () {
+        futureGetterCallCount++;
+        return widget.future;
+      },
+      initialDataGetter: () {
+        initialDataGetterCallCount++;
+        return widget.initialData;
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class CountingStreamWidget extends StatefulWidget {
+  final Stream<int>? stream;
+  final int? initialData;
+
+  const CountingStreamWidget({
+    super.key,
+    required this.stream,
+    required this.initialData,
+  });
+
+  @override
+  State<CountingStreamWidget> createState() => _CountingStreamWidgetState();
+}
+
+class _CountingStreamWidgetState extends State<CountingStreamWidget>
+    with LifecycleOwnerMixin {
+  int streamGetterCallCount = 0;
+  int initialDataGetterCallCount = 0;
+
+  late final StreamObserver<int> streamObserver;
+
+  @override
+  void initState() {
+    super.initState();
+    streamObserver = StreamObserver(
+      this,
+      streamGetter: () {
+        streamGetterCallCount++;
+        return widget.stream;
+      },
+      initialDataGetter: () {
+        initialDataGetterCallCount++;
+        return widget.initialData;
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

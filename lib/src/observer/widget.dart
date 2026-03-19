@@ -122,6 +122,64 @@ class TabControllerObserver extends LifecycleObserver<TabController> {
   Duration? get animationDuration =>
       _animationDurationGetter?.call() ?? _animationDurationValue;
 
+  late int _requestedLength;
+  late int _requestedInitialIndex;
+  late Duration? _requestedAnimationDuration;
+
+  @override
+  void onDidUpdateWidget() {
+    super.onDidUpdateWidget();
+    if (currentKey != key?.call()) {
+      return;
+    }
+
+    final nextLength = length;
+    final nextInitialIndex = initialIndex;
+    final nextAnimationDuration = animationDuration;
+    final shouldRecreate = nextLength != _requestedLength ||
+        nextInitialIndex != _requestedInitialIndex ||
+        nextAnimationDuration != _requestedAnimationDuration;
+    if (!shouldRecreate) {
+      return;
+    }
+
+    final previousTarget = target;
+    final rebuiltInitialIndex = nextInitialIndex != _requestedInitialIndex
+        ? nextInitialIndex
+        : _preserveCurrentIndex(previousTarget.index, nextLength);
+    target = _buildController(
+      requestedLength: nextLength,
+      requestedInitialIndex: nextInitialIndex,
+      controllerInitialIndex: rebuiltInitialIndex,
+      animationDuration: nextAnimationDuration,
+    );
+    onDisposeTarget(previousTarget);
+  }
+
+  int _preserveCurrentIndex(int currentIndex, int nextLength) {
+    if (nextLength == 0) {
+      return 0;
+    }
+    return currentIndex.clamp(0, nextLength - 1);
+  }
+
+  TabController _buildController({
+    required int requestedLength,
+    required int requestedInitialIndex,
+    required int controllerInitialIndex,
+    required Duration? animationDuration,
+  }) {
+    _requestedLength = requestedLength;
+    _requestedInitialIndex = requestedInitialIndex;
+    _requestedAnimationDuration = animationDuration;
+    return TabController(
+      length: requestedLength,
+      vsync: state as TickerProvider,
+      initialIndex: controllerInitialIndex,
+      animationDuration: animationDuration,
+    );
+  }
+
   @override
   void onDisposeTarget(TabController target) {
     target.dispose();
@@ -129,10 +187,10 @@ class TabControllerObserver extends LifecycleObserver<TabController> {
 
   @override
   TabController buildTarget() {
-    return TabController(
-      length: length,
-      vsync: state as TickerProvider,
-      initialIndex: initialIndex,
+    return _buildController(
+      requestedLength: length,
+      requestedInitialIndex: initialIndex,
+      controllerInitialIndex: initialIndex,
       animationDuration: animationDuration,
     );
   }
@@ -259,6 +317,12 @@ class FocusNodeObserver extends LifecycleObserver<FocusNode> {
     super.onDidUpdateWidget();
     if (currentKey != key?.call()) {
       return;
+    }
+    if (target.debugLabel != debugLabel) {
+      target.debugLabel = debugLabel;
+    }
+    if (target.onKeyEvent != onKeyEvent) {
+      target.onKeyEvent = onKeyEvent;
     }
     if (target.skipTraversal != skipTraversal) {
       target.skipTraversal = skipTraversal;
