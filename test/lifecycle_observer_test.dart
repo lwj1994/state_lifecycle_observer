@@ -420,6 +420,93 @@ void main() {
     expect(state.parentObserver.target.isDisposed, true);
     expect(state.parentObserver.zoneObserver!.target.isDisposed, true);
   });
+
+  testWidgets(
+      'Zone-registered observer key change disposes nested child observers',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: ZoneKeyedObserverWidget(version: 1, shouldThrow: false),
+    ));
+
+    final state = tester.state<_ZoneKeyedObserverWidgetState>(
+        find.byType(ZoneKeyedObserverWidget));
+
+    expect(state.isInitialized, isFalse);
+
+    state.triggerRebuild();
+    await tester.pump();
+
+    final zoneObserver = state.parentObserver.zoneObserver!;
+    final oldChild = zoneObserver.childObserver!;
+    final oldChildBuildCount = oldChild.buildCount;
+
+    await tester.pumpWidget(const MaterialApp(
+      home: ZoneKeyedObserverWidget(version: 2, shouldThrow: false),
+    ));
+
+    expect(oldChild.target.isDisposed, isTrue);
+    expect(zoneObserver.childObserver, isNot(same(oldChild)));
+
+    final newChild = zoneObserver.childObserver!;
+    state.triggerRebuild();
+    await tester.pump();
+
+    expect(oldChild.buildCount, oldChildBuildCount);
+    expect(newChild.buildCount, 1);
+  });
+
+  testWidgets(
+      'Zone-registered observer failing key rebuild removes broken observer',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: ZoneKeyedObserverWidget(version: 1, shouldThrow: false),
+    ));
+
+    final state = tester.state<_ZoneKeyedObserverWidgetState>(
+        find.byType(ZoneKeyedObserverWidget));
+
+    state.triggerRebuild();
+    await tester.pump();
+
+    final zoneObserver = state.parentObserver.zoneObserver!;
+    final originalChild = zoneObserver.childObserver!;
+    final buildCountBeforeFailure = zoneObserver.buildCount;
+
+    await tester.pumpWidget(const MaterialApp(
+      home: ZoneKeyedObserverWidget(version: 2, shouldThrow: true),
+    ));
+
+    expect(tester.takeException(), isStateError);
+    expect(zoneObserver.target.isDisposed, isTrue);
+    expect(originalChild.target.isDisposed, isTrue);
+
+    state.triggerRebuild();
+    await tester.pump();
+
+    expect(zoneObserver.buildCount, buildCountBeforeFailure);
+  });
+
+  testWidgets('owner teardown keeps disposing observers after an error',
+      (WidgetTester tester) async {
+    late _DisposeErrorWidgetState state;
+
+    await tester.pumpWidget(MaterialApp(
+      home: _DisposeErrorWidget(
+        onReady: (readyState) {
+          state = readyState;
+        },
+      ),
+    ));
+
+    final trailingTarget = state.trailingObserver.target;
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+
+    expect(tester.takeException(), isStateError);
+    expect(state.throwingObserver.target.isDisposed, isTrue);
+    expect(trailingTarget.isDisposed, isTrue);
+    expect(state.disposeFinallyRan, isTrue);
+  });
 }
 
 // --- Composing Observer Test Helpers ---
@@ -904,6 +991,85 @@ class ZoneParentObserver extends LifecycleObserver<TestController> {
   void onDisposeTarget(TestController target) => target.dispose();
 }
 
+class KeyedZoneObserver extends LifecycleObserver<TestController> {
+  final bool Function() shouldThrow;
+  TrackingChildObserver? childObserver;
+  int buildCount = 0;
+
+  KeyedZoneObserver(
+    super.state, {
+    required this.shouldThrow,
+    super.key,
+  });
+
+  @override
+  TestController buildTarget() => TestController((key?.call() as int?) ?? 850);
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    childObserver = TrackingChildObserver(state);
+    if (shouldThrow()) {
+      throw StateError('zone rebuild failed');
+    }
+  }
+
+  @override
+  void onBuild(BuildContext context) {
+    super.onBuild(context);
+    buildCount++;
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class ZoneKeyedParentObserver extends LifecycleObserver<TestController> {
+  final State nonMixinState;
+  final int Function() version;
+  final bool Function() shouldThrow;
+  KeyedZoneObserver? zoneObserver;
+
+  ZoneKeyedParentObserver(
+    super.state,
+    this.nonMixinState, {
+    required this.version,
+    required this.shouldThrow,
+  });
+
+  @override
+  TestController buildTarget() => TestController(860);
+
+  @override
+  void onInitState() {
+    super.onInitState();
+    zoneObserver = KeyedZoneObserver(
+      nonMixinState,
+      key: version,
+      shouldThrow: shouldThrow,
+    );
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
+class DisposeErrorObserver extends LifecycleObserver<TestController> {
+  DisposeErrorObserver(super.state);
+
+  @override
+  TestController buildTarget() => TestController(870);
+
+  @override
+  void onDispose() {
+    super.onDispose();
+    throw StateError('dispose failed');
+  }
+
+  @override
+  void onDisposeTarget(TestController target) => target.dispose();
+}
+
 class ZoneRegistrationTestWidget extends StatefulWidget {
   const ZoneRegistrationTestWidget({super.key});
 
@@ -929,5 +1095,85 @@ class _ZoneRegistrationTestWidgetState extends State<ZoneRegistrationTestWidget>
       _initialized = true;
     }
     return _NonMixinWidget(key: nonMixinKey);
+  }
+}
+
+class ZoneKeyedObserverWidget extends StatefulWidget {
+  final int version;
+  final bool shouldThrow;
+
+  const ZoneKeyedObserverWidget({
+    super.key,
+    required this.version,
+    required this.shouldThrow,
+  });
+
+  @override
+  State<ZoneKeyedObserverWidget> createState() =>
+      _ZoneKeyedObserverWidgetState();
+}
+
+class _ZoneKeyedObserverWidgetState extends State<ZoneKeyedObserverWidget>
+    with LifecycleOwnerMixin {
+  late ZoneKeyedParentObserver parentObserver;
+  final GlobalKey<_NonMixinState> nonMixinKey = GlobalKey<_NonMixinState>();
+  bool isInitialized = false;
+
+  void triggerRebuild() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    if (!isInitialized && nonMixinKey.currentState != null) {
+      parentObserver = ZoneKeyedParentObserver(
+        this,
+        nonMixinKey.currentState!,
+        version: () => widget.version,
+        shouldThrow: () => widget.shouldThrow,
+      );
+      isInitialized = true;
+    }
+    return _NonMixinWidget(key: nonMixinKey);
+  }
+}
+
+class _DisposeErrorWidget extends StatefulWidget {
+  final void Function(_DisposeErrorWidgetState state) onReady;
+
+  const _DisposeErrorWidget({
+    required this.onReady,
+  });
+
+  @override
+  State<_DisposeErrorWidget> createState() => _DisposeErrorWidgetState();
+}
+
+class _DisposeErrorWidgetState extends State<_DisposeErrorWidget>
+    with LifecycleOwnerMixin {
+  late final DisposeErrorObserver throwingObserver;
+  late final TestObserver trailingObserver;
+  bool disposeFinallyRan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    throwingObserver = DisposeErrorObserver(this);
+    trailingObserver = TestObserver(this);
+    widget.onReady(this);
+  }
+
+  @override
+  void dispose() {
+    try {
+      super.dispose();
+    } finally {
+      disposeFinallyRan = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
   }
 }

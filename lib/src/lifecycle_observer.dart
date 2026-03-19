@@ -14,12 +14,25 @@ final _addLifecycleObserverZoneKey = Object();
 /// observers created inside lifecycle callbacks.
 final _currentLifecycleObserverZoneKey = Object();
 
+/// Zone key for accessing the owner's child-disposal callback.
+final _disposeLifecycleObserverChildrenZoneKey = Object();
+
+/// Zone key for accessing the owner's observer-removal callback.
+final _removeLifecycleObserverZoneKey = Object();
+
 /// Returns the Zone key for addLifecycleObserver.
 /// Used internally by LifecycleOwnerMixin.
 Object get addLifecycleObserverZoneKey => _addLifecycleObserverZoneKey;
 
 /// Returns the Zone key for the currently executing observer.
 Object get currentLifecycleObserverZoneKey => _currentLifecycleObserverZoneKey;
+
+/// Returns the Zone key for disposing an observer's child subtree.
+Object get disposeLifecycleObserverChildrenZoneKey =>
+    _disposeLifecycleObserverChildrenZoneKey;
+
+/// Returns the Zone key for removing an observer from its owner.
+Object get removeLifecycleObserverZoneKey => _removeLifecycleObserverZoneKey;
 
 /// The current lifecycle state of the observer/owner.
 enum LifecycleState {
@@ -53,6 +66,10 @@ abstract class LifecycleObserver<V> {
   /// A function that returns a key to identify when the target needs
   /// to be rebuilt.
   final Object? Function()? key;
+
+  late final void Function(LifecycleObserver)?
+      _disposeLifecycleObserverChildren;
+  late final void Function(LifecycleObserver)? _removeLifecycleObserver;
 
   /// Creates a [LifecycleObserver] attached to the given [state].
   ///
@@ -88,10 +105,24 @@ abstract class LifecycleObserver<V> {
   /// ```
   LifecycleObserver(this.state, {this.key}) {
     if (state is LifecycleOwnerMixin) {
+      final owner = state as LifecycleOwnerMixin;
+      _disposeLifecycleObserverChildren = (observer) {
+        // ignore: invalid_use_of_protected_member
+        owner.disposeLifecycleObserverChildren(observer);
+      };
+      _removeLifecycleObserver = (observer) {
+        // ignore: invalid_use_of_protected_member
+        owner.removeLifecycleObserver(observer);
+      };
       // Direct registration: state is a LifecycleOwnerMixin.
       // ignore: invalid_use_of_protected_member
-      (state as LifecycleOwnerMixin).addLifecycleObserver(this);
+      owner.addLifecycleObserver(this);
     } else {
+      _disposeLifecycleObserverChildren =
+          Zone.current[_disposeLifecycleObserverChildrenZoneKey] as void
+              Function(LifecycleObserver)?;
+      _removeLifecycleObserver = Zone.current[_removeLifecycleObserverZoneKey]
+          as void Function(LifecycleObserver)?;
       // Zone-based registration: look up addLifecycleObserver from the Zone.
       // This enables nested observers created inside another observer's
       // lifecycle methods to register with the top-level State.
@@ -140,10 +171,7 @@ abstract class LifecycleObserver<V> {
   @protected
   void onBuild(BuildContext context) {
     if (currentKey != key?.call()) {
-      if (state is LifecycleOwnerMixin) {
-        // ignore: invalid_use_of_protected_member
-        (state as LifecycleOwnerMixin).disposeLifecycleObserverChildren(this);
-      }
+      _disposeLifecycleObserverChildren?.call(this);
       if (_hasTarget) {
         onDisposeTarget(target);
         _hasTarget = false;
@@ -151,12 +179,9 @@ abstract class LifecycleObserver<V> {
       try {
         onInitState();
       } catch (_) {
-        if (state is LifecycleOwnerMixin) {
-          // Remove the observer entirely so a failed re-init cannot leave
-          // a partially rebuilt subtree registered for later frames.
-          // ignore: invalid_use_of_protected_member
-          (state as LifecycleOwnerMixin).removeLifecycleObserver(this);
-        }
+        // Remove the observer entirely so a failed re-init cannot leave
+        // a partially rebuilt subtree registered for later frames.
+        _removeLifecycleObserver?.call(this);
         rethrow;
       }
     }

@@ -213,6 +213,72 @@ void main() {
     expect(state.focusObserver.target.descendantsAreFocusable, isFalse);
   });
 
+  testWidgets('FocusNodeObserver syncs latest handler and debugLabel',
+      (WidgetTester tester) async {
+    KeyEventResult handlerA(FocusNode node, KeyEvent event) =>
+        KeyEventResult.handled;
+    KeyEventResult handlerB(FocusNode node, KeyEvent event) =>
+        KeyEventResult.ignored;
+
+    await tester.pumpWidget(MaterialApp(
+      home: FocusNodeCallbackUpdateTestWidget(
+        debugLabel: 'alpha',
+        onKeyEvent: handlerA,
+      ),
+    ));
+
+    final state = tester.state<_FocusNodeCallbackUpdateTestWidgetState>(
+        find.byType(FocusNodeCallbackUpdateTestWidget));
+
+    expect(state.focusObserver.target.debugLabel, 'alpha');
+    expect(identical(state.focusObserver.target.onKeyEvent, handlerA), isTrue);
+
+    await tester.pumpWidget(MaterialApp(
+      home: FocusNodeCallbackUpdateTestWidget(
+        debugLabel: 'beta',
+        onKeyEvent: handlerB,
+      ),
+    ));
+
+    expect(state.focusObserver.target.debugLabel, 'beta');
+    expect(identical(state.focusObserver.target.onKeyEvent, handlerB), isTrue);
+  });
+
+  testWidgets('TabControllerObserver recreates controller when getters change',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: DynamicTabControllerWidget(
+        length: 3,
+        initialIndex: 1,
+        animationDuration: Duration(milliseconds: 300),
+      ),
+    ));
+
+    final state = tester.state<_DynamicTabControllerWidgetState>(
+        find.byType(DynamicTabControllerWidget));
+    final oldController = state.tabObserver.target;
+
+    expect(oldController.length, 3);
+    expect(oldController.index, 1);
+    expect(oldController.animationDuration, const Duration(milliseconds: 300));
+
+    await tester.pumpWidget(const MaterialApp(
+      home: DynamicTabControllerWidget(
+        length: 4,
+        initialIndex: 2,
+        animationDuration: Duration(milliseconds: 500),
+      ),
+    ));
+
+    expect(state.tabObserver.target, isNot(same(oldController)));
+    expect(state.tabObserver.target.length, 4);
+    expect(state.tabObserver.target.index, 2);
+    expect(
+      state.tabObserver.target.animationDuration,
+      const Duration(milliseconds: 500),
+    );
+  });
+
   testWidgets('TextEditingControllerObserver uses latest getter on key rebuild',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(
@@ -294,6 +360,75 @@ class _FocusNodeUpdateTestWidgetState extends State<FocusNodeUpdateTestWidget>
       focusNode: focusObserver.target,
       child: const SizedBox(),
     );
+  }
+}
+
+class FocusNodeCallbackUpdateTestWidget extends StatefulWidget {
+  final String? debugLabel;
+  final FocusOnKeyEventCallback? onKeyEvent;
+
+  const FocusNodeCallbackUpdateTestWidget({
+    super.key,
+    required this.debugLabel,
+    required this.onKeyEvent,
+  });
+
+  @override
+  State<FocusNodeCallbackUpdateTestWidget> createState() =>
+      _FocusNodeCallbackUpdateTestWidgetState();
+}
+
+class _FocusNodeCallbackUpdateTestWidgetState
+    extends State<FocusNodeCallbackUpdateTestWidget> with LifecycleOwnerMixin {
+  late final focusObserver = FocusNodeObserver(
+    this,
+    debugLabelGetter: () => widget.debugLabel,
+    onKeyEventGetter: () => widget.onKeyEvent,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Focus(
+      focusNode: focusObserver.target,
+      child: const SizedBox(),
+    );
+  }
+}
+
+class DynamicTabControllerWidget extends StatefulWidget {
+  final int length;
+  final int initialIndex;
+  final Duration? animationDuration;
+
+  const DynamicTabControllerWidget({
+    super.key,
+    required this.length,
+    required this.initialIndex,
+    required this.animationDuration,
+  });
+
+  @override
+  State<DynamicTabControllerWidget> createState() =>
+      _DynamicTabControllerWidgetState();
+}
+
+class _DynamicTabControllerWidgetState extends State<DynamicTabControllerWidget>
+    with TickerProviderStateMixin, LifecycleOwnerMixin {
+  late final tabObserver = TabControllerObserver(
+    this,
+    length: widget.length,
+    lengthGetter: () => widget.length,
+    initialIndex: widget.initialIndex,
+    initialIndexGetter: () => widget.initialIndex,
+    animationDuration: widget.animationDuration,
+    animationDurationGetter: () => widget.animationDuration,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
   }
 }
 

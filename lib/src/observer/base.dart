@@ -88,17 +88,31 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   Future<T>? get future => _futureGetter?.call() ?? _initialFuture;
   T? get initialData => _initialDataGetter?.call() ?? _initialDataValue;
 
+  Future<T>? _pendingFuture;
+  T? _pendingInitialData;
+  bool _hasPendingInputs = false;
+
   @override
   AsyncSnapshot<T> buildTarget() {
-    return _snapshotForCurrentFuture();
+    return _snapshotForFuture(
+      _hasPendingInputs ? _pendingFuture : future,
+      _hasPendingInputs ? _pendingInitialData : initialData,
+    );
   }
 
   Future<T>? _activeFuture;
 
   @override
   void onInitState() {
-    super.onInitState();
-    _subscribe();
+    final nextFuture = future;
+    final nextInitialData = initialData;
+    _cachePendingInputs(nextFuture, nextInitialData);
+    try {
+      super.onInitState();
+    } finally {
+      _clearPendingInputs();
+    }
+    _subscribe(nextFuture);
   }
 
   @override
@@ -107,25 +121,39 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
     if (currentKey != key?.call()) {
       return;
     }
-    if (future != _activeFuture) {
-      target = _snapshotForCurrentFuture();
-      _subscribe();
+    final nextFuture = future;
+    final nextInitialData = initialData;
+    if (nextFuture != _activeFuture) {
+      target = _snapshotForFuture(nextFuture, nextInitialData);
+      _subscribe(nextFuture);
     } else if (target.connectionState == ConnectionState.waiting ||
         target.connectionState == ConnectionState.none) {
-      target = _snapshotForCurrentFuture();
+      target = _snapshotForFuture(nextFuture, nextInitialData);
     }
   }
 
-  AsyncSnapshot<T> _snapshotForCurrentFuture() {
-    final data = initialData;
-    final snapshot = data == null
-        ? AsyncSnapshot<T>.nothing()
-        : AsyncSnapshot<T>.withData(ConnectionState.none, data);
-    return future == null ? snapshot : snapshot.inState(ConnectionState.waiting);
+  void _cachePendingInputs(Future<T>? future, T? initialData) {
+    _pendingFuture = future;
+    _pendingInitialData = initialData;
+    _hasPendingInputs = true;
   }
 
-  void _subscribe() {
-    final nextFuture = future;
+  void _clearPendingInputs() {
+    _pendingFuture = null;
+    _pendingInitialData = null;
+    _hasPendingInputs = false;
+  }
+
+  AsyncSnapshot<T> _snapshotForFuture(Future<T>? future, T? initialData) {
+    final snapshot = initialData == null
+        ? AsyncSnapshot<T>.nothing()
+        : AsyncSnapshot<T>.withData(ConnectionState.none, initialData);
+    return future == null
+        ? snapshot
+        : snapshot.inState(ConnectionState.waiting);
+  }
+
+  void _subscribe(Future<T>? nextFuture) {
     if (nextFuture == _activeFuture) return;
     _activeFuture = nextFuture;
 
@@ -186,18 +214,32 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   Stream<T>? get stream => _streamGetter?.call() ?? _initialStream;
   T? get initialData => _initialDataGetter?.call() ?? _initialDataValue;
 
+  Stream<T>? _pendingStream;
+  T? _pendingInitialData;
+  bool _hasPendingInputs = false;
+
   StreamSubscription<T>? _subscription;
   Stream<T>? _activeStream;
 
   @override
   AsyncSnapshot<T> buildTarget() {
-    return _snapshotForCurrentStream();
+    return _snapshotForStream(
+      _hasPendingInputs ? _pendingStream : stream,
+      _hasPendingInputs ? _pendingInitialData : initialData,
+    );
   }
 
   @override
   void onInitState() {
-    super.onInitState();
-    _subscribe();
+    final nextStream = stream;
+    final nextInitialData = initialData;
+    _cachePendingInputs(nextStream, nextInitialData);
+    try {
+      super.onInitState();
+    } finally {
+      _clearPendingInputs();
+    }
+    _subscribe(nextStream);
   }
 
   @override
@@ -206,25 +248,39 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
     if (currentKey != key?.call()) {
       return;
     }
-    if (stream != _activeStream) {
-      target = _snapshotForCurrentStream();
-      _subscribe();
+    final nextStream = stream;
+    final nextInitialData = initialData;
+    if (nextStream != _activeStream) {
+      target = _snapshotForStream(nextStream, nextInitialData);
+      _subscribe(nextStream);
     } else if (target.connectionState == ConnectionState.waiting ||
         target.connectionState == ConnectionState.none) {
-      target = _snapshotForCurrentStream();
+      target = _snapshotForStream(nextStream, nextInitialData);
     }
   }
 
-  AsyncSnapshot<T> _snapshotForCurrentStream() {
-    final data = initialData;
-    final snapshot = data == null
-        ? AsyncSnapshot<T>.nothing()
-        : AsyncSnapshot<T>.withData(ConnectionState.none, data);
-    return stream == null ? snapshot : snapshot.inState(ConnectionState.waiting);
+  void _cachePendingInputs(Stream<T>? stream, T? initialData) {
+    _pendingStream = stream;
+    _pendingInitialData = initialData;
+    _hasPendingInputs = true;
   }
 
-  void _subscribe() {
-    final nextStream = stream;
+  void _clearPendingInputs() {
+    _pendingStream = null;
+    _pendingInitialData = null;
+    _hasPendingInputs = false;
+  }
+
+  AsyncSnapshot<T> _snapshotForStream(Stream<T>? stream, T? initialData) {
+    final snapshot = initialData == null
+        ? AsyncSnapshot<T>.nothing()
+        : AsyncSnapshot<T>.withData(ConnectionState.none, initialData);
+    return stream == null
+        ? snapshot
+        : snapshot.inState(ConnectionState.waiting);
+  }
+
+  void _subscribe(Stream<T>? nextStream) {
     _subscription?.cancel();
     _subscription = null;
     _activeStream = nextStream;

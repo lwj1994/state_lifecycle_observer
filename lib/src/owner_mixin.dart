@@ -28,6 +28,9 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       callback,
       zoneValues: {
         addLifecycleObserverZoneKey: addLifecycleObserver,
+        disposeLifecycleObserverChildrenZoneKey:
+            disposeLifecycleObserverChildren,
+        removeLifecycleObserverZoneKey: removeLifecycleObserver,
         currentLifecycleObserverZoneKey: observer,
       },
     );
@@ -113,8 +116,9 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
 
   void _disposeObserverSubtree(
     LifecycleObserver observer,
-    Set<LifecycleObserver> disposedObservers,
-  ) {
+    Set<LifecycleObserver> disposedObservers, {
+    void Function(Object error, StackTrace stackTrace)? onError,
+  }) {
     if (!disposedObservers.add(observer)) {
       return;
     }
@@ -124,7 +128,11 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
         _observerChildren[observer] ?? const <LifecycleObserver>{},
       );
       for (final child in children) {
-        _disposeObserverSubtree(child, disposedObservers);
+        _disposeObserverSubtree(
+          child,
+          disposedObservers,
+          onError: onError,
+        );
       }
 
       _detachObserverRelations(observer);
@@ -137,9 +145,28 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
           observer.disposeTargetIfNeeded();
         }
       }
+    } catch (error, stackTrace) {
+      if (onError != null) {
+        onError(error, stackTrace);
+      } else {
+        rethrow;
+      }
     } finally {
       _observerTeardownDepth--;
     }
+  }
+
+  void _reportDeferredDisposeError(Object error, StackTrace stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'state_lifecycle_observer',
+        context: ErrorDescription(
+          'while disposing LifecycleOwnerMixin observers',
+        ),
+      ),
+    );
   }
 
   void _assertCanRegisterObserver() {
@@ -203,22 +230,50 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   void dispose() {
     _lifecycleState = LifecycleState.disposed;
     final disposedObservers = <LifecycleObserver>{};
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    void recordDisposeError(Object error, StackTrace stackTrace) {
+      if (firstError == null) {
+        firstError = error;
+        firstStackTrace = stackTrace;
+        return;
+      }
+      _reportDeferredDisposeError(error, stackTrace);
+    }
+
     final roots = List<LifecycleObserver>.of(
       _observers.where((observer) => !_observerParents.containsKey(observer)),
     );
 
     for (final observer in roots) {
-      _disposeObserverSubtree(observer, disposedObservers);
+      _disposeObserverSubtree(
+        observer,
+        disposedObservers,
+        onError: recordDisposeError,
+      );
     }
 
     for (final observer in List.of(_observers)) {
-      _disposeObserverSubtree(observer, disposedObservers);
+      _disposeObserverSubtree(
+        observer,
+        disposedObservers,
+        onError: recordDisposeError,
+      );
     }
 
     _observers.clear();
     _observerChildren.clear();
     _observerParents.clear();
-    super.dispose();
+    try {
+      super.dispose();
+    } catch (error, stackTrace) {
+      recordDisposeError(error, stackTrace);
+    }
+
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+    }
   }
 
   /// Manually call this method in your `build` method.
