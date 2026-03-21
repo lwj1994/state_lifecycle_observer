@@ -84,7 +84,7 @@ void main() {
       expect(buildCount, 1);
 
       notifier.value = 1;
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(buildCount, 2);
     });
@@ -281,6 +281,96 @@ void main() {
       expect(state.futureGetterCallCount, 2);
       expect(state.initialDataGetterCallCount, 2);
     });
+
+    testWidgets(
+        'key rebuild with same pending future keeps a single completion callback',
+        (tester) async {
+      final completer = Completer<int>();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KeyChurnFutureWidget(
+            version: 1,
+            future: completer.future,
+            initialData: 1,
+          ),
+        ),
+      );
+
+      final state = tester
+          .state<_KeyChurnFutureWidgetState>(find.byType(KeyChurnFutureWidget));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KeyChurnFutureWidget(
+            version: 2,
+            future: completer.future,
+            initialData: 2,
+          ),
+        ),
+      );
+
+      expect(
+          state.futureObserver.target.connectionState, ConnectionState.waiting);
+      expect(state.futureObserver.target.data, 2);
+
+      completer.complete(42);
+      await tester.pump();
+
+      expect(state.futureObserver.safeSetStateCallCount, 1);
+      expect(state.futureObserver.target.connectionState, ConnectionState.done);
+      expect(state.futureObserver.target.data, 42);
+    });
+
+    testWidgets(
+        'multiple key rebuilds with same pending future keep a single final callback',
+        (tester) async {
+      final completer = Completer<int>();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KeyChurnFutureWidget(
+            version: 1,
+            future: completer.future,
+            initialData: 1,
+          ),
+        ),
+      );
+
+      final state = tester
+          .state<_KeyChurnFutureWidgetState>(find.byType(KeyChurnFutureWidget));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KeyChurnFutureWidget(
+            version: 2,
+            future: completer.future,
+            initialData: 2,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KeyChurnFutureWidget(
+            version: 3,
+            future: completer.future,
+            initialData: 3,
+          ),
+        ),
+      );
+
+      expect(
+          state.futureObserver.target.connectionState, ConnectionState.waiting);
+      expect(state.futureObserver.target.data, 3);
+
+      completer.complete(99);
+      await tester.pumpAndSettle();
+
+      expect(state.futureObserver.safeSetStateCallCount, 1);
+      expect(state.futureObserver.target.connectionState, ConnectionState.done);
+      expect(state.futureObserver.target.data, 99);
+    });
   });
 
   group('StreamObserver getters', () {
@@ -394,6 +484,56 @@ class _CountingFutureWidgetState extends State<CountingFutureWidget>
   Widget build(BuildContext context) {
     super.build(context);
     return const SizedBox();
+  }
+}
+
+class KeyChurnFutureWidget extends StatefulWidget {
+  final int version;
+  final Future<int>? future;
+  final int? initialData;
+
+  const KeyChurnFutureWidget({
+    super.key,
+    required this.version,
+    required this.future,
+    required this.initialData,
+  });
+
+  @override
+  State<KeyChurnFutureWidget> createState() => _KeyChurnFutureWidgetState();
+}
+
+class _KeyChurnFutureWidgetState extends State<KeyChurnFutureWidget>
+    with LifecycleOwnerMixin {
+  late final CountingSafeSetStateFutureObserver futureObserver =
+      CountingSafeSetStateFutureObserver(
+    this,
+    futureGetter: () => widget.future,
+    initialDataGetter: () => widget.initialData,
+    key: () => widget.version,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const SizedBox();
+  }
+}
+
+class CountingSafeSetStateFutureObserver extends FutureObserver<int> {
+  int safeSetStateCallCount = 0;
+
+  CountingSafeSetStateFutureObserver(
+    super.state, {
+    required super.futureGetter,
+    required super.initialDataGetter,
+    required super.key,
+  });
+
+  @override
+  void safeSetState(VoidCallback fn) {
+    safeSetStateCallCount++;
+    super.safeSetState(fn);
   }
 }
 
