@@ -101,6 +101,7 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   }
 
   Future<T>? _activeFuture;
+  int _activeSubscriptionGeneration = 0;
 
   @override
   void onInitState() {
@@ -112,7 +113,7 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
     } finally {
       _clearPendingInputs();
     }
-    _subscribe(nextFuture);
+    _subscribe(nextFuture, force: true);
   }
 
   @override
@@ -153,22 +154,27 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
         : snapshot.inState(ConnectionState.waiting);
   }
 
-  void _subscribe(Future<T>? nextFuture) {
-    if (nextFuture == _activeFuture) return;
+  void _subscribe(Future<T>? nextFuture, {bool force = false}) {
+    if (!force && nextFuture == _activeFuture) return;
     _activeFuture = nextFuture;
+    final subscriptionGeneration = ++_activeSubscriptionGeneration;
 
     if (nextFuture == null) {
       return;
     }
 
     nextFuture.then((data) {
-      if (_activeFuture == nextFuture && state.mounted) {
+      if (_activeSubscriptionGeneration == subscriptionGeneration &&
+          _activeFuture == nextFuture &&
+          state.mounted) {
         safeSetState(() {
           target = AsyncSnapshot<T>.withData(ConnectionState.done, data);
         });
       }
     }, onError: (error, stackTrace) {
-      if (_activeFuture == nextFuture && state.mounted) {
+      if (_activeSubscriptionGeneration == subscriptionGeneration &&
+          _activeFuture == nextFuture &&
+          state.mounted) {
         safeSetState(() {
           target = AsyncSnapshot<T>.withError(
             ConnectionState.done,
@@ -181,8 +187,13 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   }
 
   @override
-  void onDisposeTarget(AsyncSnapshot<T> target) {
-    _activeFuture = null;
+  void onDispose() {
+    try {
+      super.onDispose();
+    } finally {
+      _activeFuture = null;
+      _activeSubscriptionGeneration++;
+    }
   }
 }
 
