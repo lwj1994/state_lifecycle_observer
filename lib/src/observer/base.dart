@@ -102,6 +102,8 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
 
   Future<T>? _activeFuture;
   int _activeSubscriptionGeneration = 0;
+  bool _activeFutureIsPending = false;
+  AsyncSnapshot<T>? _preservedSnapshotOnNextInit;
 
   @override
   void onInitState() {
@@ -113,7 +115,13 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
     } finally {
       _clearPendingInputs();
     }
-    _subscribe(nextFuture, force: true);
+    final preservedSnapshot = _preservedSnapshotOnNextInit;
+    _preservedSnapshotOnNextInit = null;
+    if (preservedSnapshot != null) {
+      target = preservedSnapshot;
+      return;
+    }
+    _subscribe(nextFuture);
   }
 
   @override
@@ -155,35 +163,61 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
   }
 
   void _subscribe(Future<T>? nextFuture, {bool force = false}) {
-    if (!force && nextFuture == _activeFuture) return;
+    if (!force &&
+        nextFuture == _activeFuture &&
+        (nextFuture == null || _activeFutureIsPending)) {
+      return;
+    }
     _activeFuture = nextFuture;
     final subscriptionGeneration = ++_activeSubscriptionGeneration;
+    _activeFutureIsPending = nextFuture != null;
 
     if (nextFuture == null) {
       return;
     }
 
     nextFuture.then((data) {
-      if (_activeSubscriptionGeneration == subscriptionGeneration &&
-          _activeFuture == nextFuture &&
-          state.mounted) {
-        safeSetState(() {
-          target = AsyncSnapshot<T>.withData(ConnectionState.done, data);
-        });
+      if (_activeSubscriptionGeneration != subscriptionGeneration ||
+          _activeFuture != nextFuture) {
+        return;
       }
+      _activeFutureIsPending = false;
+      if (!canSafelySetState) {
+        return;
+      }
+      safeSetState(() {
+        target = AsyncSnapshot<T>.withData(ConnectionState.done, data);
+      });
     }, onError: (error, stackTrace) {
-      if (_activeSubscriptionGeneration == subscriptionGeneration &&
-          _activeFuture == nextFuture &&
-          state.mounted) {
-        safeSetState(() {
-          target = AsyncSnapshot<T>.withError(
-            ConnectionState.done,
-            error,
-            stackTrace,
-          );
-        });
+      if (_activeSubscriptionGeneration != subscriptionGeneration ||
+          _activeFuture != nextFuture) {
+        return;
       }
+      _activeFutureIsPending = false;
+      if (!canSafelySetState) {
+        return;
+      }
+      safeSetState(() {
+        target = AsyncSnapshot<T>.withError(
+          ConnectionState.done,
+          error,
+          stackTrace,
+        );
+      });
     });
+  }
+
+  @override
+  void onDisposeTarget(AsyncSnapshot<T> target) {
+    final isKeyRebuild = currentKey != key?.call();
+    if (isKeyRebuild &&
+        _activeFuture != null &&
+        identical(future, _activeFuture) &&
+        !_activeFutureIsPending) {
+      _preservedSnapshotOnNextInit = target;
+      return;
+    }
+    _preservedSnapshotOnNextInit = null;
   }
 
   @override
@@ -192,6 +226,8 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
       super.onDispose();
     } finally {
       _activeFuture = null;
+      _activeFutureIsPending = false;
+      _preservedSnapshotOnNextInit = null;
       _activeSubscriptionGeneration++;
     }
   }
@@ -231,6 +267,8 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
 
   StreamSubscription<T>? _subscription;
   Stream<T>? _activeStream;
+  bool _reuseActiveSubscriptionOnNextInit = false;
+  AsyncSnapshot<T>? _preservedSnapshotOnNextInit;
 
   @override
   AsyncSnapshot<T> buildTarget() {
@@ -249,6 +287,19 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
       super.onInitState();
     } finally {
       _clearPendingInputs();
+    }
+    if (_reuseActiveSubscriptionOnNextInit) {
+      final preservedSnapshot = _preservedSnapshotOnNextInit;
+      _reuseActiveSubscriptionOnNextInit = false;
+      _preservedSnapshotOnNextInit = null;
+      if (preservedSnapshot == null ||
+          preservedSnapshot.connectionState == ConnectionState.none ||
+          preservedSnapshot.connectionState == ConnectionState.waiting) {
+        target = _snapshotForStream(nextStream, nextInitialData);
+      } else {
+        target = preservedSnapshot;
+      }
+      return;
     }
     _subscribe(nextStream);
   }
@@ -299,13 +350,13 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
 
     _subscription = nextStream.listen(
       (data) {
-        if (!state.mounted) return;
+        if (!canSafelySetState) return;
         safeSetState(() {
           target = AsyncSnapshot<T>.withData(ConnectionState.active, data);
         });
       },
       onError: (error, stackTrace) {
-        if (!state.mounted) return;
+        if (!canSafelySetState) return;
         safeSetState(() {
           target = AsyncSnapshot<T>.withError(
             ConnectionState.active,
@@ -315,7 +366,7 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
         });
       },
       onDone: () {
-        if (!state.mounted) return;
+        if (!canSafelySetState) return;
         safeSetState(() {
           target = target.inState(ConnectionState.done);
         });
@@ -325,8 +376,16 @@ class StreamObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
 
   @override
   void onDisposeTarget(AsyncSnapshot<T> target) {
+    final isKeyRebuild = currentKey != key?.call();
+    if (isKeyRebuild && identical(stream, _activeStream)) {
+      _reuseActiveSubscriptionOnNextInit = true;
+      _preservedSnapshotOnNextInit = target;
+      return;
+    }
     _subscription?.cancel();
     _subscription = null;
     _activeStream = null;
+    _reuseActiveSubscriptionOnNextInit = false;
+    _preservedSnapshotOnNextInit = null;
   }
 }

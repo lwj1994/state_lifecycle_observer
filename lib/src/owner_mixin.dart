@@ -11,6 +11,10 @@ import 'lifecycle_observer.dart';
 /// To use this mixin:
 /// 1. Add it to your [State] class.
 /// 2. Call `super.build(context)` within your [build] method.
+///
+/// Like other Flutter mixins that hook into `build` (for example
+/// [AutomaticKeepAliveClientMixin]), this mixin is order-sensitive when
+/// combined with other mixins that also override `build`.
 mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   // Use raw LifecycleObserver to allow any observer type.
   final List<LifecycleObserver> _observers = [];
@@ -24,16 +28,23 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
     LifecycleObserver observer,
     VoidCallback callback,
   ) {
-    runZoned(
-      callback,
-      zoneValues: {
-        addLifecycleObserverZoneKey: addLifecycleObserver,
-        disposeLifecycleObserverChildrenZoneKey:
-            disposeLifecycleObserverChildren,
-        removeLifecycleObserverZoneKey: removeLifecycleObserver,
-        currentLifecycleObserverZoneKey: observer,
-      },
-    );
+    final registrationScope = Completer<void>();
+    try {
+      runZoned(
+        callback,
+        zoneValues: {
+          addLifecycleObserverZoneKey: addLifecycleObserver,
+          disposeLifecycleObserverChildrenZoneKey:
+              disposeLifecycleObserverChildren,
+          removeLifecycleObserverZoneKey: removeLifecycleObserver,
+          lifecycleOwnerStateZoneKey: this,
+          lifecycleObserverRegistrationScopeZoneKey: registrationScope,
+          currentLifecycleObserverZoneKey: observer,
+        },
+      );
+    } finally {
+      registrationScope.complete();
+    }
   }
 
   @override
@@ -51,9 +62,13 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
           // ignore: invalid_use_of_protected_member
           observer.onInitState();
         });
-      } catch (_) {
-        _disposeObserverSubtree(observer, <LifecycleObserver>{});
-        rethrow;
+      } catch (error, stackTrace) {
+        _disposeObserverSubtree(
+          observer,
+          <LifecycleObserver>{},
+          onError: _reportDeferredDisposeError,
+        );
+        Error.throwWithStackTrace(error, stackTrace);
       }
     }
   }
@@ -65,11 +80,25 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       return;
     }
     _assertCanRegisterObserver();
-    _observers.add(observer);
-
     final parent =
         Zone.current[currentLifecycleObserverZoneKey] as LifecycleObserver?;
-    if (parent != null && parent != observer && _observers.contains(parent)) {
+    final registrationScope = Zone
+        .current[lifecycleObserverRegistrationScopeZoneKey] as Completer<void>?;
+    if (parent != null &&
+        (registrationScope == null || registrationScope.isCompleted)) {
+      throw StateError(
+          'LifecycleObserver creation failed: nested observers must be created synchronously inside lifecycle callbacks. '
+          'Creating them from async tasks is not supported.');
+    }
+    if (parent != null && parent != observer && !_observers.contains(parent)) {
+      throw StateError(
+          'LifecycleObserver creation failed: the parent observer is no longer active. '
+          'Creating observers asynchronously after a lifecycle callback is not supported.');
+    }
+
+    _observers.add(observer);
+
+    if (parent != null && parent != observer) {
       _observerParents[observer] = parent;
       _observerChildren
           .putIfAbsent(parent, () => <LifecycleObserver>{})
@@ -84,9 +113,13 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
           // ignore: invalid_use_of_protected_member
           observer.onInitState();
         });
-      } catch (_) {
-        _disposeObserverSubtree(observer, <LifecycleObserver>{});
-        rethrow;
+      } catch (error, stackTrace) {
+        _disposeObserverSubtree(
+          observer,
+          <LifecycleObserver>{},
+          onError: _reportDeferredDisposeError,
+        );
+        Error.throwWithStackTrace(error, stackTrace);
       }
     }
   }
@@ -123,6 +156,20 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       return;
     }
     _observerTeardownDepth++;
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    void recordError(Object error, StackTrace stackTrace) {
+      if (firstError == null) {
+        firstError = error;
+        firstStackTrace = stackTrace;
+        return;
+      }
+      if (onError != null) {
+        onError(error, stackTrace);
+      }
+    }
+
     try {
       final children = List<LifecycleObserver>.of(
         _observerChildren[observer] ?? const <LifecycleObserver>{},
@@ -131,7 +178,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
         _disposeObserverSubtree(
           child,
           disposedObservers,
-          onError: onError,
+          onError: recordError,
         );
       }
 
@@ -141,18 +188,26 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
         try {
           // ignore: invalid_use_of_protected_member
           observer.onDispose();
+        } catch (error, stackTrace) {
+          recordError(error, stackTrace);
         } finally {
-          observer.disposeTargetIfNeeded();
+          try {
+            observer.disposeTargetIfNeeded();
+          } catch (error, stackTrace) {
+            recordError(error, stackTrace);
+          }
         }
-      }
-    } catch (error, stackTrace) {
-      if (onError != null) {
-        onError(error, stackTrace);
-      } else {
-        rethrow;
       }
     } finally {
       _observerTeardownDepth--;
+    }
+
+    if (firstError != null) {
+      if (onError != null) {
+        onError(firstError!, firstStackTrace!);
+      } else {
+        Error.throwWithStackTrace(firstError!, firstStackTrace!);
+      }
     }
   }
 
