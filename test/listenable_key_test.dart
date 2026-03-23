@@ -7,7 +7,12 @@ import 'package:state_lifecycle_observer/state_lifecycle_observer.dart';
 
 class KeyTestWidget extends StatefulWidget {
   final int userId;
-  const KeyTestWidget({super.key, required this.userId});
+  final bool useKey;
+  const KeyTestWidget({
+    super.key,
+    required this.userId,
+    this.useKey = true,
+  });
 
   @override
   State<KeyTestWidget> createState() => _KeyTestWidgetState();
@@ -26,7 +31,7 @@ class _KeyTestWidgetState extends State<KeyTestWidget>
     observer = ListenableObserver(
       this,
       listenable: notifier,
-      key: () => widget.userId, // Use key parameter
+      key: widget.useKey ? () => widget.userId : null,
     );
   }
 
@@ -81,7 +86,11 @@ void main() {
   testWidgets('ListenableObserver without key works normally', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: KeyTestWidget(userId: 1),
+        home: KeyTestWidget(
+          userId: 1,
+          // This path intentionally leaves ListenableObserver.key unset.
+          useKey: false,
+        ),
       ),
     );
 

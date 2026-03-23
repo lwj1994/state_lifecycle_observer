@@ -20,6 +20,12 @@ final _disposeLifecycleObserverChildrenZoneKey = Object();
 /// Zone key for accessing the owner's observer-removal callback.
 final _removeLifecycleObserverZoneKey = Object();
 
+/// Zone key for accessing the lifecycle owner's [State].
+final _lifecycleOwnerStateZoneKey = Object();
+
+/// Zone key for the currently active synchronous registration scope.
+final _lifecycleObserverRegistrationScopeZoneKey = Object();
+
 /// Returns the Zone key for addLifecycleObserver.
 /// Used internally by LifecycleOwnerMixin.
 Object get addLifecycleObserverZoneKey => _addLifecycleObserverZoneKey;
@@ -33,6 +39,13 @@ Object get disposeLifecycleObserverChildrenZoneKey =>
 
 /// Returns the Zone key for removing an observer from its owner.
 Object get removeLifecycleObserverZoneKey => _removeLifecycleObserverZoneKey;
+
+/// Returns the Zone key for the lifecycle owner's [State].
+Object get lifecycleOwnerStateZoneKey => _lifecycleOwnerStateZoneKey;
+
+/// Returns the Zone key for the current observer-registration scope.
+Object get lifecycleObserverRegistrationScopeZoneKey =>
+    _lifecycleObserverRegistrationScopeZoneKey;
 
 /// The current lifecycle state of the observer/owner.
 enum LifecycleState {
@@ -58,6 +71,7 @@ abstract class LifecycleObserver<V> {
 
   /// The [State] object that this observer is attached to.
   final State state;
+  late final State _ownerState;
 
   /// The current key value used to detect changes.
   @protected
@@ -106,6 +120,7 @@ abstract class LifecycleObserver<V> {
   LifecycleObserver(this.state, {this.key}) {
     if (state is LifecycleOwnerMixin) {
       final owner = state as LifecycleOwnerMixin;
+      _ownerState = state;
       _disposeLifecycleObserverChildren = (observer) {
         // ignore: invalid_use_of_protected_member
         owner.disposeLifecycleObserverChildren(observer);
@@ -123,20 +138,27 @@ abstract class LifecycleObserver<V> {
               Function(LifecycleObserver)?;
       _removeLifecycleObserver = Zone.current[_removeLifecycleObserverZoneKey]
           as void Function(LifecycleObserver)?;
+      _ownerState =
+          Zone.current[_lifecycleOwnerStateZoneKey] as State? ?? state;
+      final registrationScope =
+          Zone.current[_lifecycleObserverRegistrationScopeZoneKey]
+              as Completer<void>?;
       // Zone-based registration: look up addLifecycleObserver from the Zone.
       // This enables nested observers created inside another observer's
       // lifecycle methods to register with the top-level State.
       final addObserver = Zone.current[_addLifecycleObserverZoneKey] as void
           Function(LifecycleObserver)?;
-      if (addObserver != null) {
+      if (addObserver != null &&
+          registrationScope != null &&
+          !registrationScope.isCompleted) {
         addObserver(this);
       } else {
         throw StateError(
             'LifecycleObserver creation failed: The provided State does not mixin LifecycleOwnerMixin, '
-            'and no Zone-based registration is available. '
+            'and no active Zone-based registration is available. '
             'This usually means:\n'
             '1. Your State class is missing "with LifecycleOwnerMixin<YourWidget>"\n'
-            '2. You are creating an observer outside of lifecycle methods (e.g., in a non-observer constructor)\n'
+            '2. You are creating an observer outside of lifecycle methods, including async tasks scheduled from them\n'
             'Please ensure your State mixes in LifecycleOwnerMixin.');
       }
     }
@@ -171,18 +193,31 @@ abstract class LifecycleObserver<V> {
   @protected
   void onBuild(BuildContext context) {
     if (currentKey != key?.call()) {
-      _disposeLifecycleObserverChildren?.call(this);
-      if (_hasTarget) {
-        onDisposeTarget(target);
-        _hasTarget = false;
-      }
       try {
+        _disposeLifecycleObserverChildren?.call(this);
+        if (_hasTarget) {
+          onDisposeTarget(target);
+          _hasTarget = false;
+        }
         onInitState();
-      } catch (_) {
-        // Remove the observer entirely so a failed re-init cannot leave
-        // a partially rebuilt subtree registered for later frames.
-        _removeLifecycleObserver?.call(this);
-        rethrow;
+      } catch (error, stackTrace) {
+        // Remove the observer entirely so a failed teardown/re-init cannot
+        // leave a partially rebuilt subtree registered for later frames.
+        try {
+          _removeLifecycleObserver?.call(this);
+        } catch (cleanupError, cleanupStackTrace) {
+          FlutterError.reportError(
+            FlutterErrorDetails(
+              exception: cleanupError,
+              stack: cleanupStackTrace,
+              library: 'state_lifecycle_observer',
+              context: ErrorDescription(
+                'while cleaning up a failed LifecycleObserver key rebuild',
+              ),
+            ),
+          );
+        }
+        Error.throwWithStackTrace(error, stackTrace);
       }
     }
   }
@@ -208,6 +243,24 @@ abstract class LifecycleObserver<V> {
     _hasTarget = false;
   }
 
+  /// Whether this observer currently owns an initialized target.
+  @protected
+  bool get hasTarget => _hasTarget;
+
+  /// Whether the lifecycle owner can still accept state updates.
+  @protected
+  bool get canSafelySetState {
+    if (!_ownerState.mounted) {
+      return false;
+    }
+    if (_ownerState is LifecycleOwnerMixin &&
+        (_ownerState as LifecycleOwnerMixin).lifecycleState ==
+            LifecycleState.disposed) {
+      return false;
+    }
+    return true;
+  }
+
   /// Override this method to perform cleanup for the [target].
   ///
   /// For example, call `target.dispose()` for controllers.
@@ -228,25 +281,22 @@ abstract class LifecycleObserver<V> {
   /// applied immediately.
   @protected
   void safeSetState(VoidCallback fn) {
-    if (!state.mounted) {
-      return;
-    }
-    if (state is LifecycleOwnerMixin &&
-        (state as LifecycleOwnerMixin).lifecycleState ==
-            LifecycleState.disposed) {
+    if (!canSafelySetState) {
       return;
     }
     final schedulerPhase = SchedulerBinding.instance.schedulerPhase;
     // Only defer while Flutter is actively building/layouting/painting.
     if (schedulerPhase != SchedulerPhase.persistentCallbacks) {
       // ignore: invalid_use_of_protected_member
-      state.setState(fn);
+      _ownerState.setState(fn);
     } else {
       // Defer until the current frame has finished rendering.
       // coverage:ignore-start
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // ignore: invalid_use_of_protected_member
-        if (state.mounted) state.setState(fn);
+        if (canSafelySetState) {
+          // ignore: invalid_use_of_protected_member
+          _ownerState.setState(fn);
+        }
       });
       // coverage:ignore-end
     }
