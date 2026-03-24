@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:state_lifecycle_observer/state_lifecycle_observer.dart';
 
 /// Zone key for accessing the parent's addLifecycleObserver function.
-/// This enables nested observers to register with the top-level State.
+/// This enables nested observers to register with the owner State.
 final _addLifecycleObserverZoneKey = Object();
 
 /// Zone key for tracking the currently executing observer.
@@ -47,7 +47,7 @@ Object get lifecycleOwnerStateZoneKey => _lifecycleOwnerStateZoneKey;
 Object get lifecycleObserverRegistrationScopeZoneKey =>
     _lifecycleObserverRegistrationScopeZoneKey;
 
-/// The current lifecycle state of the observer/owner.
+/// The current lifecycle state of a [LifecycleOwnerMixin].
 enum LifecycleState {
   /// The object is created but not yet initialized.
   created,
@@ -87,8 +87,8 @@ abstract class LifecycleObserver<V> {
 
   /// Creates a [LifecycleObserver] attached to the given [state].
   ///
-  /// If the [state] does not mixin [LifecycleOwnerMixin], this will throw
-  /// a [StateError].
+  /// If the [state] does not mixin [LifecycleOwnerMixin] and no active
+  /// Zone-based registration scope is available, this will throw a [StateError].
   ///
   /// ## Nested Observer Support (Zone-based Registration)
   ///
@@ -103,7 +103,7 @@ abstract class LifecycleObserver<V> {
   /// The [LifecycleOwnerMixin] runs all observer lifecycle callbacks inside
   /// a Zone that provides access to its [addLifecycleObserver] method via
   /// [addLifecycleObserverZoneKey]. This allows nested observers to register
-  /// with the top-level State without needing a direct reference to it.
+  /// with the owner State without needing a direct reference to it.
   ///
   /// **Example:**
   /// ```dart
@@ -145,7 +145,7 @@ abstract class LifecycleObserver<V> {
               as Completer<void>?;
       // Zone-based registration: look up addLifecycleObserver from the Zone.
       // This enables nested observers created inside another observer's
-      // lifecycle methods to register with the top-level State.
+      // lifecycle methods to register with the owner State.
       final addObserver = Zone.current[_addLifecycleObserverZoneKey] as void
           Function(LifecycleObserver)?;
       if (addObserver != null &&
@@ -164,7 +164,10 @@ abstract class LifecycleObserver<V> {
     }
   }
 
-  /// Registers a [LifecycleObserver] to be managed by this state.
+  /// Hook for subclasses to react when a child observer is registered.
+  ///
+  /// The default implementation does nothing. Actual registration is handled
+  /// by [LifecycleOwnerMixin.addLifecycleObserver].
   // coverage:ignore-start
   @protected
   void addLifecycleObserver(LifecycleObserver observer) {}
@@ -173,7 +176,6 @@ abstract class LifecycleObserver<V> {
   /// Called when the observer is initialized.
   ///
   /// This is where [target] is built and [currentKey] is set.
-  /// This method is idempotent.
   @mustCallSuper
   @protected
   void onInitState() {
@@ -235,6 +237,7 @@ abstract class LifecycleObserver<V> {
   ///
   /// Used internally by [LifecycleOwnerMixin] to guarantee cleanup even when
   /// an observer override throws before reaching `super.onDispose()`.
+  @protected
   void disposeTargetIfNeeded() {
     if (!_hasTarget) {
       return;
@@ -274,18 +277,18 @@ abstract class LifecycleObserver<V> {
   @protected
   V buildTarget();
 
-  /// Safely calls [setState] on the managed [state].
+  /// Safely calls [setState] on the lifecycle owner's [State].
   ///
-  /// Checks the current scheduler phase. If the frame is being built, laid out,
-  /// or painted, the update is deferred to the next frame. Otherwise, it is
-  /// applied immediately.
+  /// Checks whether the scheduler is currently in the
+  /// [SchedulerPhase.persistentCallbacks] phase (building, laying out, and
+  /// painting). If so, the update is deferred via [addPostFrameCallback].
+  /// In all other phases, [setState] is called immediately.
   @protected
   void safeSetState(VoidCallback fn) {
     if (!canSafelySetState) {
       return;
     }
     final schedulerPhase = SchedulerBinding.instance.schedulerPhase;
-    // Only defer while Flutter is actively building/layouting/painting.
     if (schedulerPhase != SchedulerPhase.persistentCallbacks) {
       // ignore: invalid_use_of_protected_member
       _ownerState.setState(fn);

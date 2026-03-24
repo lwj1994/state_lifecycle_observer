@@ -167,6 +167,8 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       }
       if (onError != null) {
         onError(error, stackTrace);
+      } else {
+        _reportDeferredDisposeError(error, stackTrace);
       }
     }
 
@@ -192,6 +194,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
           recordError(error, stackTrace);
         } finally {
           try {
+            // ignore: invalid_use_of_protected_member
             observer.disposeTargetIfNeeded();
           } catch (error, stackTrace) {
             recordError(error, stackTrace);
@@ -270,13 +273,32 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
   @mustCallSuper
   void didUpdateWidget(T oldWidget) {
     super.didUpdateWidget(oldWidget);
+    Object? firstError;
+    StackTrace? firstStackTrace;
     // Create a copy to allow nested observer registration during iteration
     for (var observer in List.of(_observers)) {
       if (!_observers.contains(observer)) {
         continue;
       }
-      // ignore: invalid_use_of_protected_member
-      _runObserverCallback(observer, observer.onDidUpdateWidget);
+      try {
+        // ignore: invalid_use_of_protected_member
+        _runObserverCallback(observer, observer.onDidUpdateWidget);
+      } catch (error, stackTrace) {
+        _disposeObserverSubtree(
+          observer,
+          <LifecycleObserver>{},
+          onError: _reportDeferredDisposeError,
+        );
+        if (firstError == null) {
+          firstError = error;
+          firstStackTrace = stackTrace;
+        } else {
+          _reportDeferredDisposeError(error, stackTrace);
+        }
+      }
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
     }
   }
 
@@ -331,20 +353,40 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
-  /// Manually call this method in your `build` method.
+  /// Call `super.build(context)` within your `build` method to trigger
+  /// `onBuild` for all registered observers.
   ///
-  /// This triggers `onBuild` for all registered observers.
-  /// The return value is typically ignored as this is called via `super.build`.
+  /// The returned [Widget] (a [SizedBox.shrink]) is typically discarded
+  /// by the overriding method.
   @override
   @mustCallSuper
   Widget build(BuildContext context) {
+    Object? firstError;
+    StackTrace? firstStackTrace;
     // Create a copy to allow nested observer registration during iteration
     for (var observer in List.of(_observers)) {
       if (!_observers.contains(observer)) {
         continue;
       }
-      // ignore: invalid_use_of_protected_member
-      _runObserverCallback(observer, () => observer.onBuild(context));
+      try {
+        // ignore: invalid_use_of_protected_member
+        _runObserverCallback(observer, () => observer.onBuild(context));
+      } catch (error, stackTrace) {
+        _disposeObserverSubtree(
+          observer,
+          <LifecycleObserver>{},
+          onError: _reportDeferredDisposeError,
+        );
+        if (firstError == null) {
+          firstError = error;
+          firstStackTrace = stackTrace;
+        } else {
+          _reportDeferredDisposeError(error, stackTrace);
+        }
+      }
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
     }
     return const SizedBox.shrink();
   }
@@ -391,7 +433,7 @@ class _CallbackLifecycleObserver extends LifecycleObserver<void> {
 
   @override
   void onDispose() {
-    _onDispose?.call();
     super.onDispose();
+    _onDispose?.call();
   }
 }

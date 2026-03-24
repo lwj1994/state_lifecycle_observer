@@ -162,9 +162,8 @@ class FutureObserver<T> extends LifecycleObserver<AsyncSnapshot<T>> {
         : snapshot.inState(ConnectionState.waiting);
   }
 
-  void _subscribe(Future<T>? nextFuture, {bool force = false}) {
-    if (!force &&
-        nextFuture == _activeFuture &&
+  void _subscribe(Future<T>? nextFuture) {
+    if (nextFuture == _activeFuture &&
         (nextFuture == null || _activeFutureIsPending)) {
       return;
     }
