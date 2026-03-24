@@ -298,7 +298,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       }
     }
     if (firstError != null) {
-      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
     }
   }
 
@@ -386,7 +386,7 @@ mixin LifecycleOwnerMixin<T extends StatefulWidget> on State<T> {
       }
     }
     if (firstError != null) {
-      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
     }
     return const SizedBox.shrink();
   }
