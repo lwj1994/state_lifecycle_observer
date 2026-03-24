@@ -1,3 +1,14 @@
+## 0.1.2-dev.0
+* **Fix**: Fixed `FutureObserver` duplicate pending future callbacks when the same completed future is reused across key rebuilds.
+* **Fix**: Fixed lifecycle observer cleanup — `onDispose` and `disposeTargetIfNeeded` errors are now properly caught and reported instead of aborting sibling disposal.
+* **Fix**: `StreamObserver` now preserves active subscriptions across key rebuilds when the underlying stream instance has not changed.
+* **Enhancement**: Improved error handling in `LifecycleOwnerMixin` — `didUpdateWidget` and `build` now catch per-observer errors, dispose the failing observer subtree, and continue iterating so remaining observers are not skipped.
+* **Enhancement**: `_disposeObserverSubtree` now reports second and subsequent errors via `FlutterError.reportError` instead of silently dropping them.
+* **Enhancement**: `disposeTargetIfNeeded` is now `@protected` to prevent unintended external calls.
+* **Enhancement**: Added `canSafelySetState` and `hasTarget` protected getters to `LifecycleObserver` for subclass use.
+* **Enhancement**: Improved `safeSetState` doc comments and scheduler phase handling documentation.
+* **Refactor**: `AnimControllerObserver` and `TabControllerObserver` now use super parameters.
+
 ## 0.1.1
 * **Critical Fix**: Fixed `ListenableObserver` listener leak when using `key` parameter - listener is now properly re-added in `onInitState()` after key changes trigger target rebuild.
 * **Fix**: Fixed type safety issue in `FutureObserver` and `StreamObserver` - now uses `AsyncSnapshot.nothing()` when `initialData` is null instead of unsafe cast.
