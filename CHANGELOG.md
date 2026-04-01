@@ -1,4 +1,4 @@
-## 0.1.2-dev.0
+## 0.1.2
 * **Fix**: Fixed `FutureObserver` duplicate pending future callbacks when the same completed future is reused across key rebuilds.
 * **Fix**: Fixed lifecycle observer cleanup — `onDispose` and `disposeTargetIfNeeded` errors are now properly caught and reported instead of aborting sibling disposal.
 * **Fix**: `StreamObserver` now preserves active subscriptions across key rebuilds when the underlying stream instance has not changed.
